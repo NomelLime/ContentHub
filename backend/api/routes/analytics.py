@@ -70,7 +70,16 @@ class SplitSchema(BaseModel):
     @classmethod
     def geo_strip(cls, v: list) -> list:
         """Убираем пустые строки и пробелы из гео-списка."""
-        return [g.strip().upper() for g in v if str(g).strip()]
+        if not isinstance(v, list):
+            raise ValueError("geo должен быть массивом строк")
+        result = []
+        for g in v:
+            if not isinstance(g, str):
+                raise ValueError(f"Элемент гео должен быть строкой, получен: {type(g).__name__}")
+            stripped = g.strip().upper()
+            if stripped:
+                result.append(stripped)
+        return result
 
     @model_validator(mode="after")
     def check_consistency(self) -> "SplitSchema":
