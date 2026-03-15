@@ -87,17 +87,47 @@ def get_pl_settings(user: Annotated[dict, Depends(require_viewer)]):
     return read_pl_settings()
 
 
+_PL_SETTINGS_ALLOWED_KEYS = {
+    "alerts", "default_offer_url", "cloak_template",
+    "postback_token", "test_conversion_day",
+}
+
+
 @router.put("/PreLend/settings")
 def update_pl_settings(
     body: dict,
     user: Annotated[dict, Depends(require_operator)],
 ):
-    # Базовая валидация: известные ключи
-    current = read_pl_settings()
+    """
+    Обновляет PreLend/config/settings.json.
+
+    Whitelist верхнего уровня: alerts, default_offer_url, cloak_template,
+    postback_token, test_conversion_day.
+
+    Для вложенных dict (например alerts) — deep merge:
+    передаётся {"alerts": {"bot_pct_per_hour": 5}} → только bot_pct_per_hour обновится,
+    остальные ключи alerts сохранятся.
+    """
     if not isinstance(body, dict):
         raise HTTPException(400, detail="Ожидается JSON объект")
-    # Merge: не заменяем весь файл, только переданные ключи
-    merged = {**current, **body}
+
+    forbidden = set(body.keys()) - _PL_SETTINGS_ALLOWED_KEYS
+    if forbidden:
+        raise HTTPException(
+            400,
+            detail=f"Недопустимые ключи: {forbidden}. Разрешены: {_PL_SETTINGS_ALLOWED_KEYS}",
+        )
+
+    current = read_pl_settings()
+
+    # Deep merge: для dict-значений объединяем, для скалярных — заменяем
+    merged = dict(current)
+    for key, value in body.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+
     write_pl_settings(merged, username=user["username"])
     log_audit(user, "config_write", "PreLend", {"keys": list(body.keys())})
     return {"success": True, "settings": merged}

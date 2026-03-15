@@ -108,12 +108,13 @@ ContentHub/
 | PUT | `/api/advertisers/{id}` | Обновить рекламодателя |
 | DELETE | `/api/advertisers/{id}` | Удалить рекламодателя |
 | GET | `/api/analytics/funnel` | Данные воронки из funnel_events |
-| GET | `/api/analytics/splits` | Split-тесты из splits.json |
+| GET | `/api/analytics/splits` | Split-тесты из PreLend/config/splits.json |
+| PUT | `/api/analytics/splits` | Обновить splits.json (operator+) |
 | WS | `/ws` | WebSocket: delta-push каждые 5с |
 
 ---
 
-## БАЗА ДАННЫХ (contenthub.db)
+## БАЗА ДАННЫХ (backend/contenthub.db)
 
 ```sql
 users           (id, username UNIQUE, password_hash, role, created_at, last_login)
@@ -142,7 +143,7 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 | SP settings (JSON) | `settings.json` | `os.replace()` атомично → git commit |
 | PL advertisers | `advertisers.json` | `os.replace()` → audit_log |
 | PL geo_data | `geo_data.json` | `os.replace()` → audit_log |
-| PL splits | `splits.json` | `os.replace()` → audit_log |
+| PL splits | `splits.json` | `os.replace()` → audit_log (через `PUT /api/analytics/splits`) |
 | ORC config | `.env` ORC | `config_writer.write_env_var()` |
 
 Изменения конфигов, требующие рестарта → флаг `requires_restart: true` в ответе API + кнопка «Рестарт» в UI.
@@ -153,7 +154,8 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 
 | Роль | Доступ |
 |------|--------|
-| `admin` | Все функции включая управление пользователями (`/users`) |
+| `admin` | Все функции включая управление пользователями (`/api/auth/users`) |
+| `operator` | Запись конфигов, approve/reject патчей, управление splits и агентами |
 | `viewer` | Только чтение: dashboard, аналитика, список агентов и патчей |
 
 ---
@@ -210,7 +212,7 @@ npm run dev        # dev: http://localhost:5173
 npm run build      # prod: dist/
 ```
 
-**Первый пользователь:** создаётся через `POST /api/auth/register` или напрямую в SQLite.
+**Первый пользователь:** создаётся напрямую в SQLite (`INSERT INTO users ...`) или через `POST /api/auth/users` от имени существующего admin-пользователя. Открытой регистрации нет.
 
 ---
 

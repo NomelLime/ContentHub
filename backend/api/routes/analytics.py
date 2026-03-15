@@ -1,20 +1,24 @@
 """
 api/routes/analytics.py — воронка и аналитика.
 
-GET /api/analytics/funnel?days=7    → воронка видео → конверсии
-GET /api/analytics/audit?limit=50   → audit log действий через UI
-GET /api/analytics/sp               → SP метрики за период
-GET /api/analytics/pl               → PreLend метрики за период
+GET  /api/analytics/funnel?days=7   → воронка видео → конверсии
+GET  /api/analytics/audit?limit=50  → audit log действий через UI
+GET  /api/analytics/sp              → SP метрики за период
+GET  /api/analytics/pl              → PreLend метрики за период
+GET  /api/analytics/splits          → PreLend split-тесты (splits.json)
+PUT  /api/analytics/splits          → обновить splits.json (operator+)
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from db.connection import get_db
-from services.auth import require_viewer
+from services.auth import log_audit, require_operator, require_viewer
+from services.config_reader import read_pl_splits
+from services.config_writer import write_pl_splits
 from services.metrics_collector import (
     collect_funnel,
     _collect_pl_summary,
@@ -61,3 +65,30 @@ def get_audit_log(
                 (limit,),
             ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PreLend split-тесты
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/splits")
+def get_splits(user: Annotated[dict, Depends(require_viewer)]):
+    """Возвращает все split-тесты из PreLend/config/splits.json."""
+    return {"splits": read_pl_splits()}
+
+
+@router.put("/splits")
+def update_splits(
+    body: List[dict],
+    user: Annotated[dict, Depends(require_operator)],
+):
+    """
+    Перезаписывает PreLend/config/splits.json.
+    Тело запроса — массив split-объектов.
+    Требует роль operator или admin.
+    """
+    if not isinstance(body, list):
+        raise HTTPException(400, detail="Ожидается JSON массив split-объектов")
+    write_pl_splits(body, username=user["username"])
+    log_audit(user, "config_write", "PreLend", {"resource": "splits.json", "count": len(body)})
+    return {"success": True, "splits_count": len(body)}

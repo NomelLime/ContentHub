@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Проверка безопасности: предупредить если используется дефолтный SECRET_KEY
+    if cfg.SECRET_KEY == cfg._DEFAULT_SECRET:
+        logger.warning(
+            "[ContentHub] ⚠️  ВНИМАНИЕ: используется дефолтный SECRET_KEY! "
+            "Задайте переменную CONTENTHUB_SECRET_KEY в .env перед продовым деплоем."
+        )
+
     # Инициализация БД
     init_db()
     logger.info("[ContentHub] БД инициализирована: %s", cfg.CONTENTHUB_DB)
@@ -104,10 +111,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — в продакшне ограничить конкретным доменом
+# CORS — ограничен через cfg.ALLOWED_ORIGINS (по умолчанию localhost:5173 для dev)
+# В продакшне задать ALLOWED_ORIGINS=https://yourdomain.com в .env
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cfg.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

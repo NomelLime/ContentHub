@@ -69,7 +69,7 @@ SP_ENV_SECTIONS = {
     ],
     "subtitle": [
         ("SUBTITLE_ENABLED",       "Субтитры включены", "bool"),
-        ("SUBTITLE_LANGS",         "Языки субтитров (через запятую)", "str"),
+        ("SUBTITLE_LANGUAGES",     "Языки субтитров (через запятую)", "str"),  # SP: SUBTITLE_LANGUAGES
         ("WHISPER_MODEL_SIZE",     "Размер Whisper модели (tiny/base/small/medium)", "str"),
     ],
     "voice_clone": [
@@ -78,8 +78,9 @@ SP_ENV_SECTIONS = {
     ],
     "trend_scout": [
         ("TREND_SCOUT_ENABLED",        "TrendScout агент включён", "bool"),
-        ("TREND_SCOUT_INTERVAL_HOURS", "Интервал обновления трендов (часов)", "int"),
-        ("TREND_SCORE_BOOST_THRESHOLD","Порог тренда для буста приоритета", "float"),
+        ("TREND_SCOUT_INTERVAL_H",     "Интервал обновления трендов (часов)", "int"),   # SP: TREND_SCOUT_INTERVAL_H
+        ("TREND_SCOUT_THRESHOLD",      "Порог тренда для приоритизации", "float"),      # SP: TREND_SCOUT_THRESHOLD
+        ("TREND_SCOUT_TOP_N",          "Макс. кол-во трендовых KW за цикл", "int"),
     ],
 }
 
@@ -140,6 +141,17 @@ def read_pl_geo_data() -> Dict:
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_pl_splits() -> List[Dict]:
+    """Читает PreLend/config/splits.json (A/B split-тесты шаблонов)."""
+    path = cfg.PL_SPLITS
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
 # ──────────────────────────────────────────────────────────────────────────────

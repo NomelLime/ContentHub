@@ -41,27 +41,36 @@ SP_ACCOUNTS_ROOT    = SHORTS_PROJECT_DIR / "accounts"
 PL_SETTINGS         = PRELEND_DIR / "config" / "settings.json"
 PL_ADVERTISERS      = PRELEND_DIR / "config" / "advertisers.json"
 PL_GEO_DATA         = PRELEND_DIR / "config" / "geo_data.json"
+PL_SPLITS           = PRELEND_DIR / "config" / "splits.json"
 PL_CLICKS_DB        = PRELEND_DIR / "data" / "clicks.db"
 PL_AGENT_MEMORY     = PRELEND_DIR / "data" / "agent_memory.json"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Файлы Orchestrator
 # ──────────────────────────────────────────────────────────────────────────────
-ORC_DB              = ORCHESTRATOR_DIR / "orchestrator.db"
+ORC_DB              = ORCHESTRATOR_DIR / "data" / "orchestrator.db"   # БД в data/, не в корне
 ORC_AGENT_MEMORY    = ORCHESTRATOR_DIR / "data" / "agent_memory.json"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Безопасность / JWT
 # ──────────────────────────────────────────────────────────────────────────────
-SECRET_KEY          = os.getenv("CONTENTHUB_SECRET_KEY", "change-me-in-production-32-chars!")
+_DEFAULT_SECRET     = "change-me-in-production-32-chars!"             # sentinel для startup-проверки
+SECRET_KEY          = os.getenv("CONTENTHUB_SECRET_KEY", _DEFAULT_SECRET)
 ACCESS_TOKEN_EXPIRE_MINUTES  = int(os.getenv("ACCESS_TOKEN_EXPIRE_MIN",  "60"))
 REFRESH_TOKEN_EXPIRE_DAYS    = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Веб-сервер
+# Веб-сервер / CORS
 # ──────────────────────────────────────────────────────────────────────────────
-HOST    = os.getenv("CONTENTHUB_HOST", "0.0.0.0")
-PORT    = int(os.getenv("CONTENTHUB_PORT", "8000"))
+HOST            = os.getenv("CONTENTHUB_HOST", "0.0.0.0")
+PORT            = int(os.getenv("CONTENTHUB_PORT", "8000"))
+# CORS: в продакшне задать через ALLOWED_ORIGINS=https://yourdomain.com
+# В dev по умолчанию — только локальный фронт Vite
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Интервал обновления метрик (секунды)
