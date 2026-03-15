@@ -182,13 +182,24 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
 def write_pl_geo_data(data: Dict, username: str = "contenthub") -> None:
     """Перезаписывает PreLend/config/geo_data.json."""
     path = cfg.PL_GEO_DATA
-    # Создаём файл если нет
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(path, data)
     _git_commit(
         repo_dir=cfg.PRELEND_DIR,
         file_path=path,
         message=f"[ContentHub:{username}] PL geo_data update",
+    )
+
+
+def write_pl_splits(data: List[Dict], username: str = "contenthub") -> None:
+    """Перезаписывает PreLend/config/splits.json."""
+    path = cfg.PL_SPLITS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(path, data)
+    _git_commit(
+        repo_dir=cfg.PRELEND_DIR,
+        file_path=path,
+        message=f"[ContentHub:{username}] PL splits update",
     )
 
 
