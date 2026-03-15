@@ -98,10 +98,14 @@ class SplitSchema(BaseModel):
             raise ValueError(f"Дублирующиеся id вариантов: {duplicates}")
 
         # 2. Сумма весов > 0 (иначе PHP перейдёт в array_rand, что нормально,
-        #    но скорее всего означает ошибку конфигурации)
-        total_weight = sum(v.weight for v in self.variants)
-        if total_weight == 0:
-            raise ValueError("Сумма weight по всем вариантам равна 0 — назначьте хотя бы один ненулевой вес")
+        # 3. winner_variant должен ссылаться на существующий вариант
+        if self.winner_variant is not None:
+            known_ids = {v.id for v in self.variants}
+            if self.winner_variant not in known_ids:
+                raise ValueError(
+                    f"winner_variant='{self.winner_variant}' не найден среди вариантов: {known_ids}"
+                )
+
         # 4. Статус winner_selected требует winner_variant
         if self.status == "winner_selected" and not self.winner_variant:
             raise ValueError("Статус 'winner_selected' требует указания winner_variant")
@@ -109,7 +113,7 @@ class SplitSchema(BaseModel):
         # 5. Статус winner_selected требует decided_at
         if self.status == "winner_selected" and self.decided_at is None:
             raise ValueError("Статус 'winner_selected' требует указания decided_at")
-            known_ids = {v.id for v in self.variants}
+
             if self.winner_variant not in known_ids:
                 raise ValueError(
                     f"winner_variant='{self.winner_variant}' не найден среди вариантов: {known_ids}"
