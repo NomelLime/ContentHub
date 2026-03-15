@@ -78,15 +78,20 @@ class SplitSchema(BaseModel):
             if len(code) != 2:
                 raise ValueError(f"Некорректный ISO-2 код ГЕО: '{g}' (ожидается 2 символа)")
             result.append(code)
-        return result
-            raise ValueError("geo должен быть массивом строк")
+    @field_validator("geo", mode="before")
+    @classmethod
+    def geo_strip(cls, v: list) -> list:
+        """Убираем пустые строки и пробелы из гео-списка."""
         result = []
         for g in v:
             if not isinstance(g, str):
                 raise ValueError(f"Элемент гео должен быть строкой, получен: {type(g).__name__}")
-            stripped = g.strip().upper()
-            if stripped:
-                result.append(stripped)
+            code = g.strip().upper()
+            if not code:
+                continue
+            if len(code) != 2:
+                raise ValueError(f"Некорректный ISO-2 код ГЕО: '{g}' (ожидается 2 символа)")
+            result.append(code)
         return result
 
     @model_validator(mode="after")
