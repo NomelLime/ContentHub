@@ -58,7 +58,11 @@ class SplitSchema(BaseModel):
     confidence_threshold: float                                        = Field(default=95.0, ge=0.0, le=100.0)
     variants:             List[SplitVariantSchema]                     = Field(..., min_length=2,
                                                                               description="Минимум 2 варианта для A/B теста")
-    decided_at:           Optional[str]                                = None   # ISO-8601, заполняется SplitTester при выборе winner
+    decided_at:           Optional[str]                                = Field(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$",
+        description="ISO-8601, заполняется SplitTester при выборе winner",
+    )
 
     # ── Валидаторы ────────────────────────────────────────────────────────────
 
