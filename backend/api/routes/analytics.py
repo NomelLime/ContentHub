@@ -70,7 +70,15 @@ class SplitSchema(BaseModel):
     @classmethod
     def geo_strip(cls, v: list) -> list:
         """Убираем пустые строки и пробелы из гео-списка."""
-        if not isinstance(v, list):
+        result = []
+        for g in v:
+            code = str(g).strip().upper()
+            if not code:
+                continue
+            if len(code) != 2:
+                raise ValueError(f"Некорректный ISO-2 код ГЕО: '{g}' (ожидается 2 символа)")
+            result.append(code)
+        return result
             raise ValueError("geo должен быть массивом строк")
         result = []
         for g in v:
