@@ -53,7 +53,7 @@ class SplitSchema(BaseModel):
     geo:                  List[str]                                    = Field(default_factory=list,
                                                                               description="ISO-2 коды ГЕО; пустой список = все ГЕО")
     status:               Literal["active", "paused", "winner_selected"]
-    winner_variant:       Optional[str]                                = None
+    winner_variant:       Optional[str]                                = Field(default=None, min_length=1)
     min_conversions:      int                                          = Field(default=100, ge=0)
     confidence_threshold: float                                        = Field(default=95.0, ge=0.0, le=100.0)
     variants:             List[SplitVariantSchema]                     = Field(..., min_length=2,
