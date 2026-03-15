@@ -120,7 +120,7 @@ def update_pl_settings(
 
     current = read_pl_settings()
 
-    # Deep merge: для dict-значений объединяем, для скалярных — заменяем
+    # Однуровневый merge: для dict-значений объединяем поверхностно, для скалярных — заменяем
     merged = dict(current)
     for key, value in body.items():
         if isinstance(value, dict) and isinstance(merged.get(key), dict):
