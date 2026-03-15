@@ -119,14 +119,7 @@ class SplitSchema(BaseModel):
         if self.status == "winner_selected" and self.decided_at is None:
             raise ValueError("Статус 'winner_selected' требует указания decided_at")
 
-            if self.winner_variant not in known_ids:
-                raise ValueError(
-                    f"winner_variant='{self.winner_variant}' не найден среди вариантов: {known_ids}"
-                )
-
-        # 4. Статус winner_selected требует winner_variant
-        if self.status == "winner_selected" and not self.winner_variant:
-            raise ValueError("Статус 'winner_selected' требует указания winner_variant")
+        return self
 
         return self
 
