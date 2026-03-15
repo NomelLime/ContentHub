@@ -87,8 +87,8 @@ def update_splits(
     Тело запроса — массив split-объектов.
     Требует роль operator или admin.
     """
-    if not isinstance(body, list):
-        raise HTTPException(400, detail="Ожидается JSON массив split-объектов")
+    if not body and not isinstance(body, list):
+        raise HTTPException(400, detail="Ожидается непустой JSON массив split-объектов")
     write_pl_splits(body, username=user["username"])
     log_audit(user, "config_write", "PreLend", {"resource": "splits.json", "count": len(body)})
     return {"success": True, "splits_count": len(body)}
