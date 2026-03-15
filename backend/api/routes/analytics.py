@@ -94,9 +94,13 @@ class SplitSchema(BaseModel):
         total_weight = sum(v.weight for v in self.variants)
         if total_weight == 0:
             raise ValueError("Сумма weight по всем вариантам равна 0 — назначьте хотя бы один ненулевой вес")
+        # 4. Статус winner_selected требует winner_variant
+        if self.status == "winner_selected" and not self.winner_variant:
+            raise ValueError("Статус 'winner_selected' требует указания winner_variant")
 
-        # 3. winner_variant должен ссылаться на существующий вариант
-        if self.winner_variant is not None:
+        # 5. Статус winner_selected требует decided_at
+        if self.status == "winner_selected" and self.decided_at is None:
+            raise ValueError("Статус 'winner_selected' требует указания decided_at")
             known_ids = {v.id for v in self.variants}
             if self.winner_variant not in known_ids:
                 raise ValueError(
