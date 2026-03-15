@@ -70,7 +70,7 @@ ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
     if o.strip()
-]
+] or ["http://localhost:5173"]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Интервал обновления метрик (секунды)
