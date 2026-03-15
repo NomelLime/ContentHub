@@ -150,7 +150,8 @@ def read_pl_splits() -> List[Dict]:
         return []
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("[ConfigReader] Не удалось прочитать splits.json: %s", exc)
         return []
 
 
