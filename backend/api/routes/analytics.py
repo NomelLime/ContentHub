@@ -91,9 +91,7 @@ class SplitSchema(BaseModel):
         result = []
         for g in v:
             if not isinstance(g, str):
-                raise ValueError(
-                    f"Элемент geo должен быть строкой, получен: {type(g).__name__!r}"
-                )
+                    f"Элемент geo должен быть строкой, получен: {type(g).__name__}"
             code = g.strip().upper()
             if not code:
                 continue
