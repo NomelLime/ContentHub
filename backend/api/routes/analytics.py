@@ -192,7 +192,7 @@ def update_splits(
     _validate_splits_list(body)
 
     # Сериализуем провалидированные модели обратно в dict (совместимый с PHP)
-    validated_data = [s.model_dump(exclude_none=False) for s in body]
+    validated_data = [s.model_dump(exclude_none=True) for s in body]
 
     write_pl_splits(validated_data, username=user["username"])
     log_audit(
