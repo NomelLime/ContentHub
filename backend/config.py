@@ -20,7 +20,14 @@ CONTENTHUB_DB   = BASE_DIR / "contenthub.db"
 # ──────────────────────────────────────────────────────────────────────────────
 # Пути к управляемым проектам
 # ──────────────────────────────────────────────────────────────────────────────
-GITHUB_ROOT = Path(os.getenv("GITHUB_ROOT", r"C:\Users\lemon\Documents\GitHub"))
+_github_root_raw = os.getenv("GITHUB_ROOT", "")
+if not _github_root_raw:
+    raise EnvironmentError(
+        "Задайте GITHUB_ROOT в .env — "
+        "путь к директории, в которой лежат ShortsProject, PreLend и Orchestrator. "
+        "Пример: GITHUB_ROOT=/home/user/projects"
+    )
+GITHUB_ROOT = Path(_github_root_raw)
 
 SHORTS_PROJECT_DIR  = Path(os.getenv("SP_DIR",   str(GITHUB_ROOT / "ShortsProject")))
 PRELEND_DIR         = Path(os.getenv("PL_DIR",   str(GITHUB_ROOT / "PreLend")))
