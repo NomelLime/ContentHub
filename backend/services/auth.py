@@ -10,6 +10,7 @@ Roles:
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -124,10 +125,9 @@ def get_user_by_username(username: str) -> Optional[dict]:
 
 def log_audit(user: dict, action: str, project: Optional[str], detail: dict) -> None:
     """Записывает действие в audit_log."""
-    import json as _json
     with get_db() as db:
         db.execute(
             "INSERT INTO audit_log (user_id, username, action, project, detail_json) VALUES (?,?,?,?,?)",
-            (user["id"], user["username"], action, project, _json.dumps(detail, ensure_ascii=False)),
+            (user["id"], user["username"], action, project, json.dumps(detail, ensure_ascii=False)),
         )
         db.commit()
