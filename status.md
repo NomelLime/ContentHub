@@ -49,10 +49,11 @@ ContentHub/
 │   │       └── broadcaster.py         # asyncio фоновая задача: diff → push каждые 5с
 │   ├── services/
 │   │   ├── auth.py                    # JWT создание/проверка, bcrypt hash/verify
-│   │   ├── config_reader.py           # Чтение config.py (env-backed), settings.json, advertisers.json
-│   │   ├── config_writer.py           # Атомичная запись (паттерн os.replace) + git commit
-│   │   ├── metrics_collector.py       # Агрегация: analytics.json + clicks.db + orchestrator.db
-│   │   └── agent_controller.py        # stop_request.*/start_request.* в agent_memory.json
+│   │   ├── config_reader.py           # Чтение SP .env, PL конфигов через Internal API
+│   │   ├── config_writer.py           # Запись SP .env (атомично), PL конфигов через Internal API
+│   │   ├── metrics_collector.py       # Агрегация: analytics.json + PL API + orchestrator.db
+│   │   ├── agent_controller.py        # SP: agent_memory.json; PL: через Internal API
+│   │   └── prelend_client.py          # HTTP-клиент к PreLend Internal API (NEW)
 │   └── models/
 │       └── __init__.py
 └── frontend/
@@ -141,9 +142,9 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 |---|---|---|
 | SP pipeline config | `.env` файл SP | `config_writer.write_env_var()` → git commit |
 | SP settings (JSON) | `settings.json` | `os.replace()` атомично → git commit |
-| PL advertisers | `advertisers.json` | `os.replace()` → audit_log |
-| PL geo_data | `geo_data.json` | `os.replace()` → audit_log |
-| PL splits | `splits.json` | `os.replace()` → audit_log (через `PUT /api/analytics/splits`) |
+| PL advertisers | `advertisers.json` на VPS | `prelend_client.write_advertisers()` → PUT /config/advertisers → git commit на VPS |
+| PL geo_data | `geo_data.json` на VPS | `prelend_client.write_geo_data()` → PUT /config/geo_data |
+| PL splits | `splits.json` на VPS | `prelend_client.write_splits()` → PUT /config/splits |
 | ORC config | `.env` ORC | `config_writer.write_env_var()` |
 
 Изменения конфигов, требующие рестарта → флаг `requires_restart: true` в ответе API + кнопка «Рестарт» в UI.
@@ -169,9 +170,11 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
     (main.py, config.py, db/schema.sql, все API routes, WebSocket broadcaster)
 [x] Этап 2 — Frontend React + Vite
     (6 страниц, 7 компонентов, useWebSocket hook, api.ts, Tailwind UI)
-[ ] Этап 3 — Деплой + первый запуск
+[x] Этап 3 — Интеграция с PreLend Internal API
+    (prelend_client.py, рефакторинг всех сервисов)
+[ ] Этап 4 — Деплой + первый запуск
     (запуск: `uvicorn backend.main:app --port 8000`)
-[ ] Этап 4 — Тесты API endpoints
+[ ] Этап 5 — Тесты API endpoints
 
 ---
 
@@ -194,6 +197,30 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 - 7 компонентов: MetricCard, AgentPanel, PatchReview, ConfigEditor, AdvertiserManager, FunnelChart, AlertFeed
 - `useWebSocket.ts` — авто-reconnect, delta merge в React state
 - `api.ts` — типизированные fetch-обёртки с JWT Bearer заголовком
+
+### Сессия 2 (16–18.03.2026) — Исправления + рефакторинг на Internal API
+
+**Исправления:**
+
+| Файл | Проблема | Исправление |
+|------|----------|-------------|
+| `backend/config.py` | Хардкод `C:\Users\lemon\...` в GITHUB_ROOT | `EnvironmentError` если не задан в `.env` |
+| `backend/services/auth.py` | `import json as _json` внутри функции `log_audit()` | Перенесён на верхний уровень |
+
+**Рефакторинг PreLend → Internal API:**
+
+PreLend теперь на VPS — прямой доступ к его файлам с локальной машины невозможен.
+Все операции чтения/записи теперь идут через HTTP к PreLend Internal API (порт 9090).
+
+| Файл | Что изменилось |
+|------|----------------|
+| `services/prelend_client.py` (NEW) | Копия HTTP-клиента (из Orchestrator). Singleton `get_client()` |
+| `services/config_reader.py` | `read_pl_*()` → `client.get_*()` вместо прямого чтения файлов |
+| `services/config_writer.py` | `write_pl_*()` → `client.write_*()` вместо `atomic_write_json` + git commit |
+| `services/agent_controller.py` | PL агенты: `get_pl_agents_status()` и `send_stop/start_request()` через API. SP агенты — по-прежнему через локальный agent_memory.json |
+| `services/metrics_collector.py` | `_collect_pl_summary()` → `client.get_metrics()` вместо прямого sqlite3 |
+| `backend/config.py` | + `PL_INTERNAL_API_URL`, `PL_INTERNAL_API_KEY` |
+| `backend/.env.example` | + секция PreLend Internal API |
 
 ---
 
@@ -220,14 +247,22 @@ npm run build      # prod: dist/
 
 ```env
 # JWT
-SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=480
+CONTENTHUB_SECRET_KEY=your-secret-key-here
+ACCESS_TOKEN_EXPIRE_MIN=60
+REFRESH_TOKEN_EXPIRE_DAYS=30
 
 # Пути к проектам
-SP_DIR=../ShortsProject
-PL_DIR=../PreLend
-ORC_DIR=../Orchestrator
+GITHUB_ROOT=/path/to/projects    # Обязательно — иначе EnvironmentError при старте
+
+# Web-сервер
+CONTENTHUB_HOST=0.0.0.0
+CONTENTHUB_PORT=8000
 
 # CORS (для dev — localhost:5173)
 ALLOWED_ORIGINS=http://localhost:5173
+
+# PreLend Internal API (VPS → SSH tunnel → localhost:9090)
+# SSH tunnel: ssh -N -L 9090:127.0.0.1:9090 user@vps-ip
+PL_INTERNAL_API_URL=http://localhost:9090
+PL_INTERNAL_API_KEY=your-shared-secret-key-here
 ```
