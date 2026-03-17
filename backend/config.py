@@ -84,3 +84,11 @@ ALLOWED_ORIGINS = [
 # ──────────────────────────────────────────────────────────────────────────────
 METRICS_REFRESH_SEC     = int(os.getenv("METRICS_REFRESH_SEC",  "60"))
 WS_BROADCAST_SEC        = int(os.getenv("WS_BROADCAST_SEC",     "5"))
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PreLend Internal API
+# ──────────────────────────────────────────────────────────────────────────────
+# PreLend находится на VPS. Доступ через SSH tunnel или WireGuard.
+# SSH tunnel: ssh -N -L 9090:127.0.0.1:9090 user@vps-ip
+PL_INTERNAL_API_URL = os.getenv("PL_INTERNAL_API_URL", "http://localhost:9090")
+PL_INTERNAL_API_KEY = os.getenv("PL_INTERNAL_API_KEY", "")

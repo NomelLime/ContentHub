@@ -84,68 +84,68 @@ def get_sp_agents_status() -> List[Dict]:
 
 
 def get_pl_agents_status() -> List[Dict]:
-    """Возвращает статусы агентов PreLend."""
-    memory = _read_memory(cfg.PL_AGENT_MEMORY)
-    statuses = memory.get("agent_statuses", {})
-
-    result = []
-    for agent in PL_AGENTS:
-        info = statuses.get(agent, {})
-        result.append({
-            "name":       agent,
-            "project":    "PreLend",
-            "status":     info.get("status", "UNKNOWN"),
-            "updated_at": info.get("updated_at"),
-            "error":      info.get("last_error"),
-        })
-    return result
+    """Возвращает статусы агентов PreLend через Internal API."""
+    from services.prelend_client import get_client
+    client = get_client()
+    if not client.is_available():
+        # API недоступен — возвращаем агентов со статусом UNKNOWN
+        return [
+            {"name": agent, "project": "PreLend", "status": "UNKNOWN",
+             "updated_at": None, "error": "PreLend API недоступен"}
+            for agent in PL_AGENTS
+        ]
+    return client.get_agents()
 
 
 def send_stop_request(project: str, agent_name: str) -> bool:
-    """
-    Посылает сигнал остановки агенту через agent_memory.json.
-    """
+    """Посылает сигнал остановки агенту через agent_memory.json (SP) или Internal API (PL)."""
     agent_upper = agent_name.upper()
 
     if project == "ShortsProject":
         if agent_upper not in SP_AGENTS:
             return False
         path = cfg.SP_AGENT_MEMORY
+        memory = _read_memory(path)
+        memory.setdefault("control", {})[f"stop_request.{agent_upper}"] = True
+        _write_memory(path, memory)
+        logger.info("[AgentController] Стоп-сигнал → %s/%s", project, agent_upper)
+        return True
+
     elif project == "PreLend":
         if agent_upper not in PL_AGENTS:
             return False
-        path = cfg.PL_AGENT_MEMORY
-    else:
-        return False
+        from services.prelend_client import get_client
+        ok = get_client().stop_agent(agent_upper)
+        if ok:
+            logger.info("[AgentController] Стоп-сигнал → %s/%s (via API)", project, agent_upper)
+        return ok
 
-    memory = _read_memory(path)
-    memory.setdefault("control", {})[f"stop_request.{agent_upper}"] = True
-    _write_memory(path, memory)
-    logger.info("[AgentController] Стоп-сигнал → %s/%s", project, agent_upper)
-    return True
+    return False
 
 
 def send_start_request(project: str, agent_name: str) -> bool:
-    """
-    Посылает сигнал запуска агенту через agent_memory.json.
-    """
+    """Посылает сигнал запуска агенту через agent_memory.json (SP) или Internal API (PL)."""
     agent_upper = agent_name.upper()
 
     if project == "ShortsProject":
         if agent_upper not in SP_AGENTS:
             return False
         path = cfg.SP_AGENT_MEMORY
+        memory = _read_memory(path)
+        ctrl = memory.setdefault("control", {})
+        ctrl[f"start_request.{agent_upper}"] = True
+        ctrl.pop(f"stop_request.{agent_upper}", None)
+        _write_memory(path, memory)
+        logger.info("[AgentController] Старт-сигнал → %s/%s", project, agent_upper)
+        return True
+
     elif project == "PreLend":
         if agent_upper not in PL_AGENTS:
             return False
-        path = cfg.PL_AGENT_MEMORY
-    else:
-        return False
+        from services.prelend_client import get_client
+        ok = get_client().start_agent(agent_upper)
+        if ok:
+            logger.info("[AgentController] Старт-сигнал → %s/%s (via API)", project, agent_upper)
+        return ok
 
-    memory = _read_memory(path)
-    ctrl = memory.setdefault("control", {})
-    ctrl[f"start_request.{agent_upper}"] = True
-    ctrl.pop(f"stop_request.{agent_upper}", None)  # снимаем стоп если был
-    _write_memory(path, memory)
-    logger.info("[AgentController] Старт-сигнал → %s/%s", project, agent_upper)
-    return True
+    return False

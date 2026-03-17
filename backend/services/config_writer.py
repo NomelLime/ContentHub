@@ -146,61 +146,47 @@ def write_sp_env(env_updates: Dict[str, str], username: str = "contenthub") -> N
 # ──────────────────────────────────────────────────────────────────────────────
 
 def write_pl_settings(data: Dict, username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/settings.json."""
-    path = cfg.PL_SETTINGS
-    atomic_write_json(path, data)
-    _git_commit(
-        repo_dir=cfg.PRELEND_DIR,
-        file_path=path,
-        message=f"[ContentHub:{username}] PL settings update",
-    )
+    """Перезаписывает PreLend/config/settings.json через Internal API."""
+    from services.prelend_client import get_client
+    ok = get_client().write_settings(data, source=f"contenthub:{username}")
+    if not ok:
+        raise RuntimeError("Не удалось записать PL settings через Internal API")
 
 
 def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/advertisers.json."""
-    path = cfg.PL_ADVERTISERS
-    atomic_write_json(path, data)
-    _git_commit(
-        repo_dir=cfg.PRELEND_DIR,
-        file_path=path,
-        message=f"[ContentHub:{username}] PL advertisers update",
-    )
+    """Перезаписывает PreLend/config/advertisers.json через Internal API."""
+    from services.prelend_client import get_client
+    ok = get_client().write_advertisers(data, source=f"contenthub:{username}")
+    if not ok:
+        raise RuntimeError("Не удалось записать PL advertisers через Internal API")
 
 
 def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "contenthub") -> bool:
-    """Обновляет одного рекламодателя в advertisers.json. Возвращает True при успехе."""
-    from services.config_reader import read_pl_advertisers
-    advertisers = read_pl_advertisers()
+    """Обновляет одного рекламодателя. Возвращает True при успехе."""
+    from services.prelend_client import get_client
+    client = get_client()
+    advertisers = client.get_advertisers()
     target = next((a for a in advertisers if a.get("id") == advertiser_id), None)
     if target is None:
         return False
     target.update(updates)
-    write_pl_advertisers(advertisers, username=username)
-    return True
+    return client.write_advertisers(advertisers, source=f"contenthub:{username}")
 
 
 def write_pl_geo_data(data: Dict, username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/geo_data.json."""
-    path = cfg.PL_GEO_DATA
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, data)
-    _git_commit(
-        repo_dir=cfg.PRELEND_DIR,
-        file_path=path,
-        message=f"[ContentHub:{username}] PL geo_data update",
-    )
+    """Перезаписывает PreLend/config/geo_data.json через Internal API."""
+    from services.prelend_client import get_client
+    ok = get_client().write_geo_data(data, source=f"contenthub:{username}")
+    if not ok:
+        raise RuntimeError("Не удалось записать PL geo_data через Internal API")
 
 
 def write_pl_splits(data: List[Dict], username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/splits.json."""
-    path = cfg.PL_SPLITS
-    path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(path, data)
-    _git_commit(
-        repo_dir=cfg.PRELEND_DIR,
-        file_path=path,
-        message=f"[ContentHub:{username}] PL splits update",
-    )
+    """Перезаписывает PreLend/config/splits.json через Internal API."""
+    from services.prelend_client import get_client
+    ok = get_client().write_splits(data, source=f"contenthub:{username}")
+    if not ok:
+        raise RuntimeError("Не удалось записать PL splits через Internal API")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

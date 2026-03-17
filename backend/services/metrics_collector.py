@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -101,45 +100,32 @@ def _collect_sp_summary() -> Dict:
 
 
 def _collect_pl_summary() -> Dict:
-    """Читает PreLend/data/clicks.db и возвращает агрегат за 24ч."""
-    db_path = cfg.PL_CLICKS_DB
-    if not db_path.exists():
+    """Получает метрики PreLend через Internal API за 24ч."""
+    from services.prelend_client import get_client
+    client = get_client()
+
+    if not client.is_available():
+        return {"available": False, "error": "PreLend API недоступен"}
+
+    data = client.get_metrics(period_hours=24)
+    if not data:
         return {"available": False}
 
-    try:
-        with sqlite3.connect(str(db_path)) as conn:
-            conn.row_factory = sqlite3.Row
+    clicks      = data.get("total_clicks", 0) or 0
+    conversions = data.get("conversions",  0) or 0
+    bot_pct_raw = data.get("bot_pct")
 
-            row = conn.execute("""
-                SELECT
-                    COUNT(*)                                                AS total_clicks,
-                    SUM(CASE WHEN status = 'converted' THEN 1 ELSE 0 END)  AS conversions,
-                    SUM(CASE WHEN status = 'bot'        THEN 1 ELSE 0 END)  AS bot_clicks,
-                    (SELECT geo FROM clicks
-                     WHERE ts >= datetime('now','-24 hours')
-                     GROUP BY geo ORDER BY COUNT(*) DESC LIMIT 1)           AS top_geo
-                FROM clicks
-                WHERE ts >= datetime('now', '-24 hours')
-            """).fetchone()
+    cr      = round(conversions / clicks, 4) if clicks > 0 else 0.0
+    bot_pct = round((bot_pct_raw or 0) / 100, 4)  # API отдаёт %, переводим в долю
 
-            clicks      = row["total_clicks"] or 0
-            conversions = row["conversions"]  or 0
-            bot_clicks  = row["bot_clicks"]   or 0
-            top_geo     = row["top_geo"]      or "—"
-            cr          = round(conversions / clicks, 4) if clicks > 0 else 0.0
-            bot_pct     = round(bot_clicks  / clicks, 4) if clicks > 0 else 0.0
-
-            return {
-                "available":    True,
-                "clicks_24h":   clicks,
-                "conversions_24h": conversions,
-                "cr_24h":       cr,
-                "bot_pct_24h":  bot_pct,
-                "top_geo":      top_geo,
-            }
-    except Exception as exc:
-        logger.warning("[MetricsCollector] PL clicks.db read error: %s", exc)
-        return {"available": False}
+    return {
+        "available":       True,
+        "clicks_24h":      clicks,
+        "conversions_24h": conversions,
+        "cr_24h":          cr,
+        "bot_pct_24h":     bot_pct,
+        "top_geo":         data.get("top_geo") or "—",
+    }
 
 
 def _collect_orc_summary() -> Dict:

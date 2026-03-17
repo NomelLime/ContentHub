@@ -120,39 +120,27 @@ def read_sp_env() -> Dict[str, Dict[str, Any]]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def read_pl_settings() -> Dict:
-    """Читает PreLend/config/settings.json."""
-    path = cfg.PL_SETTINGS
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Читает PreLend/config/settings.json через Internal API."""
+    from services.prelend_client import get_client
+    return get_client().get_settings()
 
 
 def read_pl_advertisers() -> List[Dict]:
-    """Читает PreLend/config/advertisers.json."""
-    path = cfg.PL_ADVERTISERS
-    if not path.exists():
-        return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Читает PreLend/config/advertisers.json через Internal API."""
+    from services.prelend_client import get_client
+    return get_client().get_advertisers()
 
 
 def read_pl_geo_data() -> Dict:
-    """Читает PreLend/config/geo_data.json (гео-адаптация шаблонов)."""
-    path = cfg.PL_GEO_DATA
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Читает PreLend/config/geo_data.json через Internal API."""
+    from services.prelend_client import get_client
+    return get_client().get_geo_data()
 
 
 def read_pl_splits() -> List[Dict]:
-    """Читает PreLend/config/splits.json (A/B split-тесты шаблонов)."""
-    path = cfg.PL_SPLITS
-    if not path.exists():
-        return []
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("[ConfigReader] Не удалось прочитать splits.json: %s", exc)
-        return []
+    """Читает PreLend/config/splits.json через Internal API."""
+    from services.prelend_client import get_client
+    return get_client().get_splits()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
