@@ -286,3 +286,11 @@ ALLOWED_ORIGINS=http://localhost:5173
 PL_INTERNAL_API_URL=http://localhost:9090
 PL_INTERNAL_API_KEY=your-shared-secret-key-here
 ```
+
+### Сессия 5 (18.03.2026) — FEAT-C: diff-viewer + FEAT-D: plan quality endpoint
+
+| Файл | Изменение |
+|------|-----------|
+| `backend/api/routes/patches.py` | + `GET /api/patches/{id}/diff` — возвращает full patch data (original_code, patched_code, diff_preview) из orchestrator.db |
+| `frontend/src/pages/PatchesPage.tsx` | Полная перезапись: built-in side-by-side DiffViewer (red/green highlights, lazy load), PatchCard с Approve/Reject, разделение Pending/История |
+| `backend/api/routes/analytics.py` | + `GET /api/analytics/plan-quality?limit=N` — оценки качества планов из plan_quality_scores с JOIN evolution_plans |
