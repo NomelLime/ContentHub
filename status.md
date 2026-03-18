@@ -245,3 +245,21 @@ PreLend теперь на VPS. Все операции через HTTP к Intern
 - [ ] Smoke: `curl localhost:9090/health` → ok
 - [ ] PreLend: `php tests/test_bot_filter.php` — зелёные (DC_CIDRS + новые тесты)
 - [ ] `.env.example` — без рабочих ключей (только инструкции по генерации)
+
+### Code Review v2 (18.03.2026) — дополнительные исправления после верификации тестов
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| BUG-F | High | `backend/tests/conftest.py` | `_login_failures` — глобальный `defaultdict` в `auth.py`, не сбрасывался между тестами. `TestLogin::test_login_rate_limit` делал 5 неудач для `testadmin` → все следующие тесты получали 429. Добавлен `@pytest.fixture(autouse=True) reset_rate_limiter()` с `.clear()` до и после каждого теста |
+| BUG-G | Low | `backend/tests/test_patches.py` | `test_diff_endpoint_exists` ожидал `404`, но без `ORC_DB` endpoint корректно возвращает `503 Service Unavailable`. Исправлено: `assert resp.status_code in (404, 503)` |
+
+**Финальный статус тестов:**
+- `python -m pytest backend/tests/ -q` → **23/23** ✅
+- `grep -rn "localStorage" frontend/src/` → 0 реальных вызовов ✅
+
+**Коммиты Code Review v2:**
+
+| Коммит | Файл(ы) | Суть |
+|--------|---------|------|
+| `bb14558` | 10 файлов | FIX#3 role in-memory, FIX#6 token rotation, FIX#7 sessions cleanup, FIX#9 response_model, FIX#16 CORS |
+| `ee5ceaa` | conftest.py, test_patches.py | reset_rate_limiter fixture, diff 503 |
