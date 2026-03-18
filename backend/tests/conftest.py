@@ -71,3 +71,17 @@ def viewer_token(client) -> str:
 
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Сбрасывает глобальный rate limiter между тестами.
+    
+    _login_failures — глобальный defaultdict в api/routes/auth.py.
+    Без сброса тест test_login_rate_limit загрязняет состояние
+    для всех последующих тестов, которые используют того же пользователя.
+    """
+    from api.routes.auth import _login_failures
+    _login_failures.clear()
+    yield
+    _login_failures.clear()
