@@ -294,3 +294,12 @@ PL_INTERNAL_API_KEY=your-shared-secret-key-here
 | `backend/api/routes/patches.py` | + `GET /api/patches/{id}/diff` — возвращает full patch data (original_code, patched_code, diff_preview) из orchestrator.db |
 | `frontend/src/pages/PatchesPage.tsx` | Полная перезапись: built-in side-by-side DiffViewer (red/green highlights, lazy load), PatchCard с Approve/Reject, разделение Pending/История |
 | `backend/api/routes/analytics.py` | + `GET /api/analytics/plan-quality?limit=N` — оценки качества планов из plan_quality_scores с JOIN evolution_plans |
+
+### Code Review (18.03.2026) — исправления по результатам полного ревью
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| FIX#4 | High | `backend/.env.example` | Инструкция по генерации `PL_INTERNAL_API_KEY` |
+| FIX#5 | High | `backend/tests/` (NEW) | `conftest.py` (изолированная БД, фикстуры admin/viewer), `test_auth.py` (login/rate-limit/RBAC/logout/refresh), `test_patches.py` |
+| FIX#6 | High | `backend/services/config_writer.py`, `backend/api/routes/patches.py` | `approve/reject_patch()` логируют `rowcount=0` как race condition warning; endpoint возвращает 409 вместо 404 |
+| FIX#9 | Medium | `backend/api/routes/auth.py` | Pydantic модели `TokenResponse`, `UserInfo`, `SuccessResponse`; добавлен `GET /api/auth/me` |
