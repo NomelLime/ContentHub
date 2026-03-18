@@ -1,13 +1,13 @@
 /**
  * hooks/useWebSocket.ts — хук для WebSocket подписки на каналы ContentHub
  *
- * Аутентификация: токен передаётся как query param ?token=<JWT>,
- * т.к. WebSocket не поддерживает Authorization header при handshake.
- * При реконнекте токен читается заново из localStorage — если он был обновлён,
- * новое соединение использует свежий токен.
+ * Аутентификация: токен передаётся как query param ?token=<JWT>.
+ * Токен читается из памяти (getAccessToken) при каждом (ре)коннекте —
+ * подхватывает обновлённый токен после refresh.
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { getAccessToken } from '../lib/api'
 
 type Channel = 'agents' | 'metrics' | 'alerts'
 type Handler = (data: any) => void
@@ -23,9 +23,9 @@ export function useWebSocket(
     const ch    = channels.join(',')
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
 
-    // Токен читается при каждом (ре)коннекте — подхватываем refresh
-    const accessToken = localStorage.getItem('access_token') ?? ''
-    const url = `${proto}://${window.location.host}/ws?channels=${ch}&token=${encodeURIComponent(accessToken)}`
+    // Токен из памяти — читается при каждом (ре)коннекте
+    const token = getAccessToken() ?? ''
+    const url   = `${proto}://${window.location.host}/ws?channels=${ch}&token=${encodeURIComponent(token)}`
 
     const ws = new WebSocket(url)
     wsRef.current = ws
@@ -41,7 +41,7 @@ export function useWebSocket(
     }
 
     ws.onclose = (ev) => {
-      // Код 4001 = недействительный токен — не реконнектимся автоматически
+      // Код 4001 = токен отклонён — не реконнектимся автоматически
       if (ev.code === 4001) {
         console.warn('[WS] Токен отклонён сервером (4001). Требуется повторная авторизация.')
         return

@@ -1,6 +1,6 @@
-import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy, useState, useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
-import { clearTokens } from './lib/api'
+import { getAccessToken, initAuth, auth as authApi, clearAuth } from './lib/api'
 import clsx from 'clsx'
 
 // Lazy pages
@@ -11,9 +11,36 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const UsersPage     = lazy(() => import('./pages/UsersPage'))
 const LoginPage     = lazy(() => import('./pages/LoginPage'))
 
+/**
+ * Защита маршрутов.
+ * При первой загрузке (F5) access_token нет в памяти →
+ * пробуем refresh через httpOnly cookie → если успех, показываем контент.
+ */
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('access_token')
-  if (!token) return <Navigate to="/login" replace />
+  const [loading, setLoading] = useState(true)
+  const [authed,  setAuthed]  = useState(false)
+
+  useEffect(() => {
+    const token = getAccessToken()
+    if (token) {
+      // Токен уже в памяти (навигация внутри SPA, не F5)
+      setAuthed(true)
+      setLoading(false)
+    } else {
+      // Первая загрузка после F5 — пробуем refresh через cookie
+      initAuth().then(ok => {
+        setAuthed(ok)
+        setLoading(false)
+      })
+    }
+  }, [])
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-screen text-gray-500">
+      Загрузка…
+    </div>
+  )
+  if (!authed) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
@@ -25,15 +52,12 @@ const NAV = [
 ]
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const navigate  = useNavigate()
-  const role      = localStorage.getItem('role')
-  const isAdmin   = role === 'admin'
+  const navigate = useNavigate()
+  const role     = localStorage.getItem('role')
+  const isAdmin  = role === 'admin'
 
-  const logout = () => {
-    const rt = localStorage.getItem('refresh_token')
-    if (rt) import('./lib/api').then(({ auth }) => auth.logout(rt).catch(() => {}))
-    clearTokens()
-    localStorage.removeItem('role')
+  const logout = async () => {
+    await authApi.logout()   // удаляет httpOnly cookie + clearAuth()
     navigate('/login')
   }
 
@@ -65,7 +89,9 @@ function Layout({ children }: { children: React.ReactNode }) {
               to="/users"
               className={({ isActive }) => clsx(
                 'block px-4 py-2.5 rounded-lg text-sm transition-colors',
-                isActive ? 'bg-indigo-600/20 text-indigo-400 font-medium' : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                isActive
+                  ? 'bg-indigo-600/20 text-indigo-400 font-medium'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800',
               )}
             >
               Пользователи
@@ -73,7 +99,10 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </nav>
         <div className="p-3 border-t border-gray-800">
-          <button onClick={logout} className="w-full px-4 py-2 text-sm text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-left">
+          <button
+            onClick={logout}
+            className="w-full px-4 py-2 text-sm text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-left"
+          >
             Выйти
           </button>
         </div>

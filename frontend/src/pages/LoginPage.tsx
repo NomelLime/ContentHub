@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { auth, setTokens } from '../lib/api'
+import { auth } from '../lib/api'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]       = useState<string | null>(null)
-  const [loading, setLoading]   = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(false)
   const navigate                = useNavigate()
 
   const submit = async (e: React.FormEvent) => {
@@ -14,9 +14,9 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = await auth.login(username, password)
-      setTokens(data.access_token, data.refresh_token)
-      localStorage.setItem('role', data.role)
+      // auth.login() вызывает setAccessToken(access_token, role) внутри —
+      // access_token попадает в память, role в localStorage, refresh_token в httpOnly cookie
+      await auth.login(username, password)
       navigate('/')
     } catch (e: any) {
       setError(e.message)

@@ -1,9 +1,13 @@
 """
 api/routes/auth.py — аутентификация.
 
-POST /api/auth/login          → {access_token, refresh_token}
-POST /api/auth/refresh        → {access_token}
-POST /api/auth/logout         → удаляет refresh token
+Хранение токенов:
+  access_token  — возвращается в JSON (фронт хранит в JS-переменной, не localStorage)
+  refresh_token — httpOnly cookie (JS не имеет доступа, CSRF-защита через samesite=lax)
+
+POST /api/auth/login          → {access_token, role} + устанавливает cookie
+POST /api/auth/refresh        → {access_token, role} — читает cookie, не JSON body
+POST /api/auth/logout         → удаляет cookie + сессию из БД
 POST /api/auth/change-password → смена пароля (admin или себе)
 
 GET  /api/auth/users          → список пользователей (только admin)
@@ -19,7 +23,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from db.connection import get_db
@@ -63,12 +68,10 @@ def _check_login_rate(username: str) -> None:
 
 
 def _record_login_failure(username: str) -> None:
-    """Записывает неудачную попытку входа."""
     _login_failures[username].append(_time.time())
 
 
 def _clear_login_failures(username: str) -> None:
-    """Сбрасывает счётчик при успешном логине."""
     _login_failures.pop(username, None)
 
 
@@ -81,7 +84,11 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(body: LoginRequest):
-    _check_login_rate(body.username)   # 429 если превышен лимит попыток
+    """
+    Аутентификация. Возвращает access_token в JSON.
+    Refresh token устанавливается как httpOnly cookie (JS не видит).
+    """
+    _check_login_rate(body.username)
 
     user = get_user_by_username(body.username)
     if not user or not verify_password(body.password, user["password_hash"]):
@@ -94,9 +101,9 @@ def login(body: LoginRequest):
             detail="Установите пароль администратора: POST /api/auth/change-password",
         )
 
-    _clear_login_failures(body.username)   # сбрасываем счётчик при успехе
+    _clear_login_failures(body.username)
 
-    access_token  = create_access_token(user["id"], user["username"], user["role"])
+    access_token              = create_access_token(user["id"], user["username"], user["role"])
     raw_refresh, hashed_refresh = create_refresh_token()
 
     exp = datetime.now(timezone.utc) + timedelta(days=cfg.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -111,21 +118,38 @@ def login(body: LoginRequest):
         )
         db.commit()
 
-    return {
-        "access_token":  access_token,
-        "refresh_token": raw_refresh,
-        "token_type":    "bearer",
-        "role":          user["role"],
-    }
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
+    # access_token — в JSON (фронт хранит в JS-переменной)
+    # refresh_token — в httpOnly cookie (браузер отправляет автоматически)
+    response = JSONResponse(content={
+        "access_token": access_token,
+        "token_type":   "bearer",
+        "role":         user["role"],
+    })
+    response.set_cookie(
+        key      = "refresh_token",
+        value    = raw_refresh,
+        httponly = True,                                     # JS не видит
+        secure   = cfg.COOKIE_SECURE,                       # True для HTTPS
+        samesite = "lax",                                    # защита от CSRF
+        max_age  = cfg.REFRESH_TOKEN_EXPIRE_DAYS * 86_400,
+        path     = "/api/auth",                              # cookie только для auth endpoints
+    )
+    return response
 
 
 @router.post("/refresh")
-def refresh(body: RefreshRequest):
-    hashed = hashlib.sha256(body.refresh_token.encode()).hexdigest()
+def refresh(
+    response: Response,
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+):
+    """
+    Обновляет access_token. Refresh token берётся из httpOnly cookie — не из тела запроса.
+    Вызывается автоматически фронтендом при истёкшем access_token или при загрузке страницы.
+    """
+    if not refresh_token:
+        raise HTTPException(401, detail="Refresh cookie отсутствует")
+
+    hashed = hashlib.sha256(refresh_token.encode()).hexdigest()
     with get_db() as db:
         row = db.execute(
             """SELECT s.user_id, s.expires_at, u.username, u.role
@@ -144,22 +168,34 @@ def refresh(body: RefreshRequest):
         raise HTTPException(401, detail="Refresh token истёк")
 
     access_token = create_access_token(row["user_id"], row["username"], row["role"])
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "role": row["role"]}
 
 
 @router.post("/logout")
-def logout(body: RefreshRequest):
-    hashed = hashlib.sha256(body.refresh_token.encode()).hexdigest()
-    with get_db() as db:
-        db.execute("DELETE FROM sessions WHERE token_hash = ?", (hashed,))
-        db.commit()
+def logout(
+    response: Response,
+    refresh_token: Optional[str] = Cookie(None, alias="refresh_token"),
+):
+    """Удаляет сессию из БД и очищает httpOnly cookie."""
+    if refresh_token:
+        hashed = hashlib.sha256(refresh_token.encode()).hexdigest()
+        with get_db() as db:
+            db.execute("DELETE FROM sessions WHERE token_hash = ?", (hashed,))
+            db.commit()
+
+    response.delete_cookie(
+        key      = "refresh_token",
+        path     = "/api/auth",
+        httponly = True,
+        samesite = "lax",
+    )
     return {"success": True}
 
 
 class ChangePasswordRequest(BaseModel):
     username:     str
     new_password: str
-    old_password: Optional[str] = None  # обязателен для не-admin
+    old_password: Optional[str] = None
 
 
 @router.post("/change-password")

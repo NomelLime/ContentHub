@@ -108,6 +108,12 @@ PL_INTERNAL_API_URL = os.getenv("PL_INTERNAL_API_URL", "http://localhost:9090")
 PL_INTERNAL_API_KEY = os.getenv("PL_INTERNAL_API_KEY", "")
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Cookie
+# ──────────────────────────────────────────────────────────────────────────────
+# False для localhost (HTTP). Поставить True при переходе на HTTPS.
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Shared integrations via Orchestrator (prelend_client и др.)
 # ──────────────────────────────────────────────────────────────────────────────
 # Добавляем корень Orchestrator в sys.path — чтобы `from integrations.prelend_client`

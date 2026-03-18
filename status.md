@@ -198,6 +198,17 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 - `useWebSocket.ts` — авто-reconnect, delta merge в React state
 - `api.ts` — типизированные fetch-обёртки с JWT Bearer заголовком
 
+### Сессия 4 (18.03.2026) — Перенос токенов из localStorage в httpOnly cookie + memory
+
+| Файл | Проблема | Исправление |
+|------|----------|-------------|
+| `backend/api/routes/auth.py` | refresh_token в JSON → localStorage (XSS-вектор: любой JS мог украсть) | `login()` ставит refresh_token как `httpOnly cookie (path=/api/auth)`. `refresh()` читает из `Cookie`, не из тела. `logout()` удаляет cookie через `delete_cookie()`. Удалена `RefreshRequest` модель |
+| `backend/config.py` | Нет конфига для `secure` флага cookie | + `COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false")` — `False` для localhost, `True` для HTTPS |
+| `frontend/src/lib/api.ts` | Оба токена в `localStorage` | `accessToken` — переменная модуля (in-memory). `setAccessToken()`, `getAccessToken()`, `clearAuth()`. `initAuth()` — refresh через cookie при загрузке страницы. Все `fetch` с `credentials: 'include'` |
+| `frontend/src/hooks/useWebSocket.ts` | Токен из `localStorage` | `getAccessToken()` из памяти |
+| `frontend/src/App.tsx` | `RequireAuth` синхронно проверял `localStorage` | `useState(loading)` + `useEffect` с `initAuth()`: при F5 — refresh через cookie, loading spinner пока ждём |
+| `frontend/src/pages/LoginPage.tsx` | Прямые `localStorage.setItem('access_token', ...)` | `auth.login()` вызывает `setAccessToken()` внутри — нет прямой работы с `localStorage` |
+
 ### Сессия 3 (18.03.2026) — Безопасность перед боевым запуском
 
 | Файл | Проблема | Исправление |
