@@ -194,7 +194,8 @@ def write_pl_splits(data: List[Dict], username: str = "contenthub") -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def approve_patch(patch_id: int) -> bool:
-    """Одобряет патч в orchestrator.db (status → 'approved')."""
+    """Одобряет патч в orchestrator.db (status → 'approved').
+    Возвращает False если патч не найден, уже обработан или произошёл race."""
     import sqlite3
     from datetime import datetime, timezone
     if not cfg.ORC_DB.exists():
@@ -205,11 +206,18 @@ def approve_patch(patch_id: int) -> bool:
             (datetime.now(timezone.utc).isoformat(), patch_id),
         )
         conn.commit()
+        if cur.rowcount == 0:
+            logger.warning(
+                "[ConfigWriter] Патч #%d: rowcount=0 при approve — "
+                "уже обработан (race с Telegram или другим оператором)",
+                patch_id,
+            )
         return cur.rowcount > 0
 
 
 def reject_patch(patch_id: int) -> bool:
-    """Отклоняет патч в orchestrator.db (status → 'rejected')."""
+    """Отклоняет патч в orchestrator.db (status → 'rejected').
+    Возвращает False если патч не найден, уже обработан или произошёл race."""
     import sqlite3
     if not cfg.ORC_DB.exists():
         return False
@@ -219,4 +227,10 @@ def reject_patch(patch_id: int) -> bool:
             (patch_id,),
         )
         conn.commit()
+        if cur.rowcount == 0:
+            logger.warning(
+                "[ConfigWriter] Патч #%d: rowcount=0 при reject — "
+                "уже обработан (race с Telegram или другим оператором)",
+                patch_id,
+            )
         return cur.rowcount > 0

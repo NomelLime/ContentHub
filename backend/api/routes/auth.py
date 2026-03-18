@@ -42,6 +42,22 @@ import config as cfg
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+# ── Pydantic response models ───────────────────────────────────────────────────
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type:   str = "bearer"
+    role:         str
+
+class UserInfo(BaseModel):
+    id:       int
+    username: str
+    role:     str
+
+class SuccessResponse(BaseModel):
+    success: bool = True
+
+
 # ── Rate limiting для /login ───────────────────────────────────────────────────
 # In-memory: сбрасывается при рестарте — приемлемо для localhost-деплоя.
 # Защита по username: предотвращает перебор пароля конкретного пользователя.
@@ -80,6 +96,12 @@ def _clear_login_failures(username: str) -> None:
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+@router.get("/me", response_model=UserInfo)
+def me(user: Annotated[dict, Depends(require_viewer)]) -> dict:
+    """Возвращает данные текущего авторизованного пользователя."""
+    return {"id": user["id"], "username": user["username"], "role": user["role"]}
 
 
 @router.post("/login")

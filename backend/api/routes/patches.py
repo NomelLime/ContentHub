@@ -66,7 +66,7 @@ def approve(
 ):
     ok = approve_patch(patch_id)
     if not ok:
-        raise HTTPException(404, detail=f"Патч #{patch_id} не найден или уже обработан")
+        raise HTTPException(409, detail="Патч уже обработан или не найден")
     log_audit(user, "patch_approve", "Orchestrator", {"patch_id": patch_id})
     return {"success": True, "message": f"Патч #{patch_id} одобрен. Orchestrator применит на следующем цикле."}
 
@@ -78,6 +78,6 @@ def reject(
 ):
     ok = reject_patch(patch_id)
     if not ok:
-        raise HTTPException(404, detail=f"Патч #{patch_id} не найден или уже обработан")
+        raise HTTPException(409, detail="Патч уже обработан или не найден")
     log_audit(user, "patch_reject", "Orchestrator", {"patch_id": patch_id})
     return {"success": True, "message": f"Патч #{patch_id} отклонён."}
