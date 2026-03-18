@@ -36,118 +36,60 @@ ContentHub/
 │   │   └── schema.sql                 # 5 таблиц: users, sessions, audit_log, metrics_cache, video_funnel_links
 │   ├── api/
 │   │   ├── routes/
-│   │   │   ├── auth.py                # POST /api/auth/login, /logout, /me
-│   │   │   ├── dashboard.py           # GET /api/dashboard (метрики всех проектов)
+│   │   │   ├── auth.py                # POST /api/auth/login, /logout, /me, /refresh (с token rotation)
+│   │   │   ├── dashboard.py           # GET /api/dashboard
 │   │   │   ├── agents.py              # GET /api/agents, POST /api/agents/{name}/start|stop
-│   │   │   ├── patches.py             # GET/POST /api/patches/{id}/approve|reject
-│   │   │   ├── configs.py             # GET/PUT /api/configs/{project}/{section}
-│   │   │   ├── advertisers.py         # CRUD /api/advertisers
-│   │   │   ├── analytics.py           # GET /api/analytics/funnel, /api/analytics/splits
-│   │   │   └── ws_route.py            # GET /ws (WebSocket endpoint)
+│   │   │   ├── patches.py             # GET/POST /api/patches/{id}/approve|reject (409 при race)
+│   │   │   ├── configs.py             # GET/PUT /api/configs/*
+│   │   │   ├── advertisers.py         # CRUD рекламодателей PreLend
+│   │   │   ├── analytics.py           # GET /api/analytics/*, /plan-quality
+│   │   │   └── ws_route.py            # WebSocket /ws (JWT auth через ?token=)
 │   │   └── ws/
-│   │       ├── manager.py             # ConnectionManager (broadcast, connect, disconnect)
-│   │       └── broadcaster.py         # asyncio фоновая задача: diff → push каждые 5с
+│   │       └── broadcaster.py         # asyncio broadcast loop с diff-логикой
 │   ├── services/
-│   │   ├── auth.py                    # JWT создание/проверка, bcrypt hash/verify
-│   │   ├── config_reader.py           # Чтение SP .env, PL конфигов через Internal API
-│   │   ├── config_writer.py           # Запись SP .env (атомично), PL конфигов через Internal API
-│   │   ├── metrics_collector.py       # Агрегация: analytics.json + PL API + orchestrator.db
-│   │   └── agent_controller.py        # SP: agent_memory.json; PL: через Internal API
-│   │   # prelend_client используется из Orchestrator/integrations/ через sys.path (config.py)
-│   └── models/
-│       └── __init__.py
+│   │   ├── auth.py                    # JWT create/verify, bcrypt, RBAC depends
+│   │   ├── metrics_collector.py       # Агрегация метрик из 3 проектов
+│   │   ├── config_reader.py           # Чтение конфигов (SP, PreLend, Orchestrator)
+│   │   ├── config_writer.py           # Запись конфигов + approve/reject патчей (→ 409 при race)
+│   │   └── agent_controller.py        # Запись флагов в agent_memory.json
+│   └── tests/
+│       ├── conftest.py                # Изолированная БД, фикстуры admin/viewer
+│       ├── test_auth.py               # login, rate-limit, RBAC, logout, refresh
+│       ├── test_patches.py            # list, approve (viewer→403), nonexistent→409
+│       └── test_token_rotation.py     # Token rotation: replay protection, role в ответе
 └── frontend/
-    ├── index.html
-    ├── package.json
-    ├── vite.config.ts
-    ├── tailwind.config.js
-    ├── tsconfig.json
-    ├── src/
-    │   ├── main.tsx
-    │   ├── App.tsx                    # Router: /dashboard, /patches, /config, /analytics, /users
-    │   ├── index.css
-    │   ├── lib/
-    │   │   └── api.ts                 # fetch-обёртки + JWT заголовки
-    │   ├── hooks/
-    │   │   └── useWebSocket.ts        # WebSocket hook (auto-reconnect, delta merge)
-    │   ├── components/
-    │   │   ├── Dashboard/MetricCard.tsx       # Карточка метрики (views, CR, ROI)
-    │   │   ├── AgentPanel/AgentPanel.tsx      # Статус-карточки агентов + кнопки старт/стоп
-    │   │   ├── PatchReview/PatchReview.tsx    # diff-вьюер + approve/reject кнопки
-    │   │   ├── ConfigEditor/ConfigEditor.tsx  # Форм-редактор конфига по секциям
-    │   │   ├── AdvertiserManager/AdvertiserManager.tsx  # CRUD таблица advertisers.json
-    │   │   ├── FunnelChart/FunnelChart.tsx    # Видео → просмотры → клики → конверсии
-    │   │   └── AlertFeed/AlertFeed.tsx        # Real-time поток событий через WebSocket
-    │   └── pages/
-    │       ├── DashboardPage.tsx      # /dashboard — общие метрики + агенты
-    │       ├── PatchesPage.tsx        # /patches — список патчей, approve/reject
-    │       ├── ConfigPage.tsx         # /config — редактор конфигов по проектам
-    │       ├── AnalyticsPage.tsx      # /analytics — воронка + split-тесты
-    │       ├── LoginPage.tsx          # /login
-    │       └── UsersPage.tsx          # /users (только admin)
+    └── src/
+        ├── lib/
+        │   └── api.ts                 # HTTP клиент: accessToken (memory), role (memory), clearAuth
+        ├── hooks/
+        │   └── useWebSocket.ts        # WS хук: getAccessToken() при каждом коннекте
+        ├── pages/
+        │   ├── LoginPage.tsx          # auth.login() → setAccessToken(at, role) in-memory
+        │   ├── DashboardPage.tsx      # getUserRole() [FIX#3]
+        │   ├── PatchesPage.tsx        # getUserRole() + DiffViewer [FIX#3]
+        │   ├── ConfigPage.tsx         # getUserRole() [FIX#3]
+        │   ├── AnalyticsPage.tsx      # FunnelChart
+        │   └── UsersPage.tsx          # CRUD пользователей
+        └── App.tsx                    # RequireAuth + Layout с getUserRole() [FIX#3]
 ```
 
 ---
 
-## API ENDPOINTS
+## ХРАНЕНИЕ ТОКЕНОВ (актуальное состояние)
 
-| Метод | URL | Описание |
-|-------|-----|----------|
-| POST | `/api/auth/login` | JWT авторизация |
-| GET | `/api/auth/me` | Текущий пользователь |
-| GET | `/api/dashboard` | Агрегированные метрики SP + PL + ORC |
-| GET | `/api/agents` | Статус всех агентов из agent_memory.json |
-| POST | `/api/agents/{name}/start` | Пишет `start_request.{name}` в agent_memory |
-| POST | `/api/agents/{name}/stop` | Пишет `stop_request.{name}` в agent_memory |
-| GET | `/api/patches` | Список pending_patches из orchestrator.db |
-| POST | `/api/patches/{id}/approve` | Обновляет статус → approved |
-| POST | `/api/patches/{id}/reject` | Обновляет статус → rejected |
-| GET | `/api/configs/{project}/{section}` | Читает секцию конфига проекта |
-| PUT | `/api/configs/{project}/{section}` | Атомичная запись конфига + audit_log |
-| GET | `/api/advertisers` | Список из advertisers.json |
-| POST | `/api/advertisers` | Добавить рекламодателя |
-| PUT | `/api/advertisers/{id}` | Обновить рекламодателя |
-| DELETE | `/api/advertisers/{id}` | Удалить рекламодателя |
-| GET | `/api/analytics/funnel` | Данные воронки из funnel_events |
-| GET | `/api/analytics/splits` | Split-тесты из PreLend/config/splits.json |
-| PUT | `/api/analytics/splits` | Обновить splits.json (operator+) |
-| WS | `/ws` | WebSocket: delta-push каждые 5с |
+| Данные        | Хранилище     | Описание |
+|---------------|---------------|----------|
+| access_token  | JS memory     | Теряется при F5 → авто-refresh через cookie |
+| refresh_token | httpOnly cookie | JS не видит. Path=/api/auth. Token rotation при каждом /refresh [FIX#6] |
+| role          | JS memory     | getUserRole() / setUserRole(). Восстанавливается из /refresh ответа [FIX#3] |
 
----
-
-## БАЗА ДАННЫХ (backend/contenthub.db)
-
-```sql
-users           (id, username UNIQUE, password_hash, role, created_at, last_login)
-sessions        (id, user_id, token_hash, created_at, expires_at)
-audit_log       (id, ts, user_id, action, project, detail_json)
-metrics_cache   (key PRIMARY KEY, value_json, updated_at)
-video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
+**Поток после F5:**
 ```
-
----
-
-## WEBSOCKET BROADCASTER
-
-Фоновая asyncio задача (каждые 5 секунд):
-- Читает `agent_memory.json` SP и PL → статусы агентов
-- Читает `notifications` из orchestrator.db → алерты
-- Diff от предыдущего состояния → push только дельты подключённым клиентам
-
----
-
-## УПРАВЛЕНИЕ КОНФИГАМИ (из UI)
-
-| Что меняется | Как хранится | Механизм |
-|---|---|---|
-| SP pipeline config | `.env` файл SP | `config_writer.write_env_var()` → git commit |
-| SP settings (JSON) | `settings.json` | `os.replace()` атомично → git commit |
-| PL advertisers | `advertisers.json` на VPS | `prelend_client.write_advertisers()` → PUT /config/advertisers → git commit на VPS |
-| PL geo_data | `geo_data.json` на VPS | `prelend_client.write_geo_data()` → PUT /config/geo_data |
-| PL splits | `splits.json` на VPS | `prelend_client.write_splits()` → PUT /config/splits |
-| ORC config | `.env` ORC | `config_writer.write_env_var()` |
-
-Изменения конфигов, требующие рестарта → флаг `requires_restart: true` в ответе API + кнопка «Рестарт» в UI.
+RequireAuth → initAuth() → POST /api/auth/refresh
+    → setAccessToken(at) + setUserRole(role)
+    → новый refresh cookie (token rotation)
+    → рендер страницы с актуальной role
+```
 
 ---
 
@@ -161,113 +103,11 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 
 ---
 
-## СТАТУС РАЗРАБОТКИ
-
-**Дата создания:** 15.03.2026
-**Фаза:** Backend + Frontend реализованы. Следующий шаг: деплой + настройка `.env`.
-
-[x] Этап 1 — Backend FastAPI
-    (main.py, config.py, db/schema.sql, все API routes, WebSocket broadcaster)
-[x] Этап 2 — Frontend React + Vite
-    (6 страниц, 7 компонентов, useWebSocket hook, api.ts, Tailwind UI)
-[x] Этап 3 — Интеграция с PreLend Internal API
-    (prelend_client.py, рефакторинг всех сервисов)
-[ ] Этап 4 — Деплой + первый запуск
-    (запуск: `uvicorn backend.main:app --port 8000`)
-[ ] Этап 5 — Тесты API endpoints
-
----
-
-## ИСТОРИЯ СЕССИЙ
-
-### Сессия 1 (15.03.2026) — Полная реализация
-
-Создан новый проект с нуля как часть плана 15 фич.
-
-**Backend:**
-- FastAPI приложение с JWT auth (bcrypt + python-jose)
-- SQLite DB с 5 таблицами
-- 8 API route-модулей + WebSocket endpoint
-- Сервисный слой: config_reader/writer (атомичная запись), metrics_collector (агрегация из 3 проектов), agent_controller (запись флагов в agent_memory.json)
-- WebSocket ConnectionManager + asyncio broadcaster с diff-логикой
-
-**Frontend:**
-- React 18 + Vite + TypeScript + Tailwind CSS
-- 6 страниц: Dashboard, Patches, Config, Analytics, Login, Users
-- 7 компонентов: MetricCard, AgentPanel, PatchReview, ConfigEditor, AdvertiserManager, FunnelChart, AlertFeed
-- `useWebSocket.ts` — авто-reconnect, delta merge в React state
-- `api.ts` — типизированные fetch-обёртки с JWT Bearer заголовком
-
-### Сессия 4 (18.03.2026) — Перенос токенов из localStorage в httpOnly cookie + memory
-
-| Файл | Проблема | Исправление |
-|------|----------|-------------|
-| `backend/api/routes/auth.py` | refresh_token в JSON → localStorage (XSS-вектор: любой JS мог украсть) | `login()` ставит refresh_token как `httpOnly cookie (path=/api/auth)`. `refresh()` читает из `Cookie`, не из тела. `logout()` удаляет cookie через `delete_cookie()`. Удалена `RefreshRequest` модель |
-| `backend/config.py` | Нет конфига для `secure` флага cookie | + `COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false")` — `False` для localhost, `True` для HTTPS |
-| `frontend/src/lib/api.ts` | Оба токена в `localStorage` | `accessToken` — переменная модуля (in-memory). `setAccessToken()`, `getAccessToken()`, `clearAuth()`. `initAuth()` — refresh через cookie при загрузке страницы. Все `fetch` с `credentials: 'include'` |
-| `frontend/src/hooks/useWebSocket.ts` | Токен из `localStorage` | `getAccessToken()` из памяти |
-| `frontend/src/App.tsx` | `RequireAuth` синхронно проверял `localStorage` | `useState(loading)` + `useEffect` с `initAuth()`: при F5 — refresh через cookie, loading spinner пока ждём |
-| `frontend/src/pages/LoginPage.tsx` | Прямые `localStorage.setItem('access_token', ...)` | `auth.login()` вызывает `setAccessToken()` внутри — нет прямой работы с `localStorage` |
-
-### Сессия 3 (18.03.2026) — Безопасность перед боевым запуском
-
-| Файл | Проблема | Исправление |
-|------|----------|-------------|
-| `backend/config.py` | Дефолтный `SECRET_KEY` допускал старт с известным ключом | Авто-генерация `secrets.token_hex(32)` если ключ не задан; флаг `_is_temp_secret`; WARNING в лог |
-| `backend/main.py` | Сравнение с `_DEFAULT_SECRET` (побочный эффект) | Проверка `getattr(cfg, '_is_temp_secret', False)` |
-| `backend/api/routes/ws_route.py` | WebSocket без аутентификации — любой в LAN мог подключиться | JWT проверка через `?token=<JWT>` query param до `accept()`. Код `4001` при отказе |
-| `frontend/src/hooks/useWebSocket.ts` | Токен не передавался на WS | `localStorage.getItem('access_token')` добавлен в URL. При `code=4001` — нет авторекконекта |
-| `backend/api/routes/configs.py` | `PUT /PreLend/settings` принимал `body: dict` без типизации | Pydantic модели `PLAlertsUpdate` + `PLSettingsUpdate` с числовыми границами. FastAPI 422 при невалидных типах |
-| `backend/api/routes/auth.py` | Нет защиты от brute-force на `/login` | In-memory rate limiter: 5 попыток за 60 сек на username. 429 при превышении |
-
-**Исправления:**
-
-| Файл | Проблема | Исправление |
-|------|----------|-------------|
-| `backend/config.py` | Хардкод `C:\Users\lemon\...` в GITHUB_ROOT | `EnvironmentError` если не задан в `.env` |
-| `backend/services/auth.py` | `import json as _json` внутри функции `log_audit()` | Перенесён на верхний уровень |
-
-**Рефакторинг PreLend → Internal API:**
-
-PreLend теперь на VPS — прямой доступ к его файлам с локальной машины невозможен.
-Все операции чтения/записи теперь идут через HTTP к PreLend Internal API (порт 9090).
-
-| Файл | Что изменилось |
-|------|----------------|
-| `services/prelend_client.py` (NEW) | Копия HTTP-клиента (из Orchestrator). Singleton `get_client()` |
-| `services/config_reader.py` | `read_pl_*()` → `client.get_*()` вместо прямого чтения файлов |
-| `services/config_writer.py` | `write_pl_*()` → `client.write_*()` вместо `atomic_write_json` + git commit |
-| `services/agent_controller.py` | PL агенты: `get_pl_agents_status()` и `send_stop/start_request()` через API. SP агенты — по-прежнему через локальный agent_memory.json |
-| `services/metrics_collector.py` | `_collect_pl_summary()` → `client.get_metrics()` вместо прямого sqlite3 |
-| `backend/config.py` | + `PL_INTERNAL_API_URL`, `PL_INTERNAL_API_KEY` |
-| `backend/.env.example` | + секция PreLend Internal API |
-
----
-
-## ЗАПУСК
-
-```bash
-# Backend
-cd ContentHub/backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-
-# Frontend
-cd ContentHub/frontend
-npm install
-npm run dev        # dev: http://localhost:5173
-npm run build      # prod: dist/
-```
-
-**Первый пользователь:** создаётся напрямую в SQLite (`INSERT INTO users ...`) или через `POST /api/auth/users` от имени существующего admin-пользователя. Открытой регистрации нет.
-
----
-
 ## ENV (.env.example)
 
 ```env
 # JWT
-CONTENTHUB_SECRET_KEY=your-secret-key-here
+CONTENTHUB_SECRET_KEY=your-secret-key-here   # python3 -c "import secrets; print(secrets.token_hex(32))"
 ACCESS_TOKEN_EXPIRE_MIN=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
 
@@ -278,28 +118,130 @@ GITHUB_ROOT=/path/to/projects    # Обязательно — иначе Environ
 CONTENTHUB_HOST=0.0.0.0
 CONTENTHUB_PORT=8000
 
-# CORS (для dev — localhost:5173)
+# CORS: задать конкретный origin, НЕ "*" (несовместимо с allow_credentials=True)
 ALLOWED_ORIGINS=http://localhost:5173
 
+# Cookie secure (false для localhost, true для HTTPS)
+COOKIE_SECURE=false
+
 # PreLend Internal API (VPS → SSH tunnel → localhost:9090)
-# SSH tunnel: ssh -N -L 9090:127.0.0.1:9090 user@vps-ip
 PL_INTERNAL_API_URL=http://localhost:9090
-PL_INTERNAL_API_KEY=your-shared-secret-key-here
+PL_INTERNAL_API_KEY=   # python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### Сессия 5 (18.03.2026) — FEAT-C: diff-viewer + FEAT-D: plan quality endpoint
+---
 
-| Файл | Изменение |
-|------|-----------|
-| `backend/api/routes/patches.py` | + `GET /api/patches/{id}/diff` — возвращает full patch data (original_code, patched_code, diff_preview) из orchestrator.db |
-| `frontend/src/pages/PatchesPage.tsx` | Полная перезапись: built-in side-by-side DiffViewer (red/green highlights, lazy load), PatchCard с Approve/Reject, разделение Pending/История |
-| `backend/api/routes/analytics.py` | + `GET /api/analytics/plan-quality?limit=N` — оценки качества планов из plan_quality_scores с JOIN evolution_plans |
+## СТАТУС РАЗРАБОТКИ
 
-### Code Review (18.03.2026) — исправления по результатам полного ревью
+**Дата создания:** 15.03.2026
+**Фаза:** Backend + Frontend реализованы. Все code review исправления применены. Следующий шаг: деплой.
+
+[x] Этап 1 — Backend FastAPI
+[x] Этап 2 — Frontend React + Vite
+[x] Этап 3 — Интеграция с PreLend Internal API
+[x] Этап 4 (partial) — Все критические фиксы безопасности применены
+[x] Этап 5 — Тесты API endpoints (conftest, test_auth, test_patches, test_token_rotation)
+[ ] Деплой + первый запуск (uvicorn backend.main:app --port 8000)
+
+---
+
+## ИСТОРИЯ СЕССИЙ
+
+### Сессия 1 (15.03.2026) — Полная реализация
+
+Создан новый проект с нуля. Backend FastAPI, SQLite, JWT, WebSocket, Frontend React+Vite+TS+Tailwind.
+
+### Сессия 2 (16.03.2026) — Рефакторинг PreLend → Internal API
+
+PreLend теперь на VPS. Все операции через HTTP к Internal API (порт 9090).
+
+### Сессия 3 (18.03.2026) — Безопасность перед боевым запуском
+
+| Файл | Исправление |
+|------|-------------|
+| `backend/config.py` | Авто-генерация SECRET_KEY если не задан; флаг `_is_temp_secret`; WARNING в лог |
+| `backend/main.py` | Проверка `_is_temp_secret` в lifespan |
+| `backend/api/routes/ws_route.py` | JWT проверка через `?token=<JWT>` до `accept()`. Код `4001` при отказе |
+| `frontend/src/hooks/useWebSocket.ts` | `getAccessToken()` из памяти; при `code=4001` нет авторекконекта |
+| `backend/api/routes/configs.py` | Pydantic модели `PLAlertsUpdate` + `PLSettingsUpdate` с числовыми границами |
+| `backend/api/routes/auth.py` | Rate limiter: 5 попыток за 60 сек, 429 при превышении |
+| `backend/config.py` | Хардкод GITHUB_ROOT → EnvironmentError если не задан |
+
+### Сессия 4 (18.03.2026) — Перенос refresh_token из localStorage в httpOnly cookie
+
+| Файл | Исправление |
+|------|-------------|
+| `backend/api/routes/auth.py` | refresh_token → httpOnly cookie (path=/api/auth). `refresh()` читает из Cookie |
+| `backend/config.py` | + `COOKIE_SECURE` |
+| `frontend/src/lib/api.ts` | accessToken → module variable. `initAuth()` → refresh при F5 |
+| `frontend/src/App.tsx` | `RequireAuth` с async `initAuth()` + loading spinner |
+
+### Сессия 5 (18.03.2026) — FEAT-C: diff-viewer + FEAT-D: plan quality
+
+| Файл | Исправление |
+|------|-------------|
+| `backend/api/routes/patches.py` | + `GET /api/patches/{id}/diff` |
+| `frontend/src/pages/PatchesPage.tsx` | built-in side-by-side DiffViewer, PatchCard с Approve/Reject |
+| `backend/api/routes/analytics.py` | + `GET /api/analytics/plan-quality?limit=N` |
+
+### Code Review (18.03.2026) — Сессия 11: полное применение всех фиксов
+
+Применены все исправления из полного code review 4 проектов (v2 от 18.03.2026).
+
+**ContentHub:**
 
 | # | Severity | Файл(ы) | Исправление |
 |---|----------|---------|-------------|
-| FIX#4 | High | `backend/.env.example` | Инструкция по генерации `PL_INTERNAL_API_KEY` |
-| FIX#5 | High | `backend/tests/` (NEW) | `conftest.py` (изолированная БД, фикстуры admin/viewer), `test_auth.py` (login/rate-limit/RBAC/logout/refresh), `test_patches.py` |
-| FIX#6 | High | `backend/services/config_writer.py`, `backend/api/routes/patches.py` | `approve/reject_patch()` логируют `rowcount=0` как race condition warning; endpoint возвращает 409 вместо 404 |
-| FIX#9 | Medium | `backend/api/routes/auth.py` | Pydantic модели `TokenResponse`, `UserInfo`, `SuccessResponse`; добавлен `GET /api/auth/me` |
+| FIX#3 | Critical | `api.ts`, `App.tsx`, `DashboardPage.tsx`, `PatchesPage.tsx`, `ConfigPage.tsx`, `LoginPage.tsx` | `role` из `localStorage` → in-memory `_userRole`. Добавлены `getUserRole()` / `setUserRole()`. После F5: role восстанавливается из /refresh ответа. `canControl` на дашборде работает корректно |
+| FIX#6 | High | `backend/api/routes/auth.py` | Token rotation при `/refresh`: DELETE старой сессии → INSERT новой → новый cookie. Replay attack защита |
+| FIX#7 | High | `backend/main.py` | В `metrics_refresh_loop()` раз в ~1ч: `DELETE FROM sessions WHERE expires_at < now()`. Предотвращает неограниченный рост таблицы sessions |
+| FIX#8 | High | `backend/tests/test_token_rotation.py` (NEW) | 4 теста: rotation меняет cookie, старый token → 401, role в ответе, logout → refresh → 401 |
+| FIX#9 | Medium | `backend/api/routes/auth.py` | Pydantic `TokenResponse`, `UserInfo`, `SuccessResponse`; `response_model` на всех endpoints |
+| FIX#16 | Medium | `backend/main.py` | CORS: `allow_methods=["GET","POST","PUT","DELETE","OPTIONS"]`, `allow_headers=["Authorization","Content-Type"]`. Warning при `"*"` в ALLOWED_ORIGINS |
+
+**PreLend:**
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| FIX#1 | Critical | `src/BotFilter.php` | `DC_SUBNETS` (prefix /8 блоки) → `DC_CIDRS` с `ip2long()`. 90 точных диапазонов. Lazy-init `getDcRanges()` |
+| FIX#4 | High | `public/postback.php` | `HTTP_X_FORWARDED_FOR` (подделываемый) → `HTTP_CF_CONNECTING_IP` через `ClickLogger::getRealIp()` |
+| FIX#5 | High | `internal_api/auth.py` | Warning при dev-режиме (однократно за процесс); инструкция в `.env.example` |
+| FIX#10 | Medium | `data/init_db.sql` | `idx_conv_rate_limit ON conversions(advertiser_id, source, created_at)` |
+| FIX#13 | Medium | `src/BotFilter.php`, `public/index.php`, тесты | Полная миграция на `FilterResult` enum. Старые `const` BC-совместимы |
+| FIX#17 | Medium | `src/TemplateRenderer.php` | Fallback-ветка отсутствующего шаблона: `http_response_code(200)` → `http_response_code(404)` |
+
+**Orchestrator:**
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| FIX#2 | Critical | `modules/evolution.py` | Санитизация: `agent_statuses`, `shave_suspects`, `strategist_recs` через `_san()`. Публичный `sanitize_for_prompt()` в `code_evolver.py` |
+| FIX#11 | Medium | `main_orchestrator.py` | `_cleanup_old_data()`: metrics_snapshots >90d, notifications >30d, планы >180d — раз в сутки |
+| FIX#14 | Medium | `modules/evolution.py` | `quality_block`: тернарный оператор → читаемый `if`-chain |
+| FIX#15 | Medium | `db/patches.py` | `datetime('now')` SQLite → `datetime.now(timezone.utc).isoformat()` во всех `mark_patch_*()` |
+
+**ShortsProject:**
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| FIX#18 | Low | `pipeline/session_manager.py` | `datetime.now()` → `datetime.now(timezone.utc)` в `mark_session_verified()` и `get_session_age_hours()`. Нормализация старых naive-записей |
+
+**Cross-project (ContentHub + Orchestrator):**
+
+| # | Severity | Файл(ы) | Исправление |
+|---|----------|---------|-------------|
+| FIX#9 | High | `backend/services/config_writer.py`, `backend/api/routes/patches.py` | `rowcount=0` → warning; endpoint → 409 Conflict при race condition |
+| FIX#12 | Medium | `backend/api/routes/auth.py` | Pydantic response_model для всех endpoints |
+
+---
+
+## ЧЕКЛИСТ ПОСЛЕ ВСЕХ ИСПРАВЛЕНИЙ
+
+- [x] `grep -rn "localStorage" ContentHub/frontend/src/` — нет реальных вызовов (только комментарии)
+- [x] `backend/tests/test_token_rotation.py` — 4 теста token rotation
+- [ ] `python -m pytest ContentHub/backend/tests/ -q` — запустить на деплое
+- [ ] Smoke: login → dashboard → кнопки start/stop видны admin
+- [ ] Smoke: login → F5 → role сохранился (in-memory через /refresh)
+- [ ] Smoke: `curl localhost:8000/health` → ok
+- [ ] Smoke: `curl localhost:9090/health` → ok
+- [ ] PreLend: `php tests/test_bot_filter.php` — зелёные (DC_CIDRS + новые тесты)
+- [ ] `.env.example` — без рабочих ключей (только инструкции по генерации)

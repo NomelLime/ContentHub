@@ -1,13 +1,16 @@
 import React, { useState } from 'react'
+// [FIX#3] getUserRole() вместо localStorage.getItem('role')
+import { getUserRole } from '../lib/api'
 import ConfigEditor from '../components/ConfigEditor/ConfigEditor'
 import AdvertiserManager from '../components/AdvertiserManager/AdvertiserManager'
 
 const TABS = ['ShortsProject', 'PreLend — Рекламодатели']
 
 export default function ConfigPage() {
-  const [tab, setTab]  = useState(0)
-  const role           = localStorage.getItem('role')
-  const canEdit        = role === 'admin' || role === 'operator'
+  const [tab, setTab] = useState(0)
+  // [FIX#3] role берём из in-memory модуля, не из localStorage
+  const role    = getUserRole()
+  const canEdit = role === 'admin' || role === 'operator'
 
   return (
     <div className="space-y-6">

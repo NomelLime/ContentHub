@@ -1,45 +1,46 @@
-import React, { useEffect, useState } from 'react'
-import { patches as patchesApi, api } from '../lib/api'
+import React, { useEffect, useState, useCallback } from 'react'
+// [FIX#3] getUserRole() вместо localStorage.getItem('role')
+import { patches as patchesApi, getUserRole } from '../lib/api'
 
-// ── Diff Viewer ────────────────────────────────────────────────────────────────
+// ── DiffViewer (inline, без npm зависимостей) ─────────────────────────────────
 
 function DiffViewer({ original, patched }: { original: string; patched: string }) {
-  const origLines = original.split('\n')
-  const patchLines = patched.split('\n')
-  const maxLen = Math.max(origLines.length, patchLines.length)
+  const origLines    = original.split('\n')
+  const patchedLines = patched.split('\n')
+  const maxLen       = Math.max(origLines.length, patchedLines.length)
 
   return (
-    <div className="grid grid-cols-2 gap-0 font-mono text-xs overflow-auto max-h-96 border border-gray-700 rounded-lg">
-      <div className="border-r border-gray-700">
-        <div className="px-3 py-1.5 bg-gray-800 text-gray-400 border-b border-gray-700 sticky top-0">
-          Оригинал
-        </div>
-        {origLines.map((line, i) => {
-          const pLine = patchLines[i] ?? ''
-          const changed = line !== pLine
+    <div className="grid grid-cols-2 gap-1 text-xs font-mono overflow-auto max-h-96">
+      <div className="space-y-0.5">
+        <div className="text-gray-400 px-2 py-1 bg-gray-700/50 rounded text-center">До</div>
+        {Array.from({ length: maxLen }, (_, i) => {
+          const line    = origLines[i] ?? ''
+          const changed = line !== (patchedLines[i] ?? '')
           return (
-            <div key={i} className={`flex px-3 py-0.5 ${changed ? 'bg-red-950/40' : ''}`}>
-              <span className="text-gray-600 w-8 shrink-0 select-none">{i + 1}</span>
-              <span className={`whitespace-pre-wrap break-all ${changed ? 'text-red-300' : 'text-gray-300'}`}>
-                {line || '\u00a0'}
-              </span>
+            <div
+              key={i}
+              className={`px-2 py-0.5 rounded whitespace-pre-wrap break-all ${
+                changed ? 'bg-red-900/40 text-red-300' : 'text-gray-300'
+              }`}
+            >
+              {line || '\u00a0'}
             </div>
           )
         })}
       </div>
-      <div>
-        <div className="px-3 py-1.5 bg-gray-800 text-gray-400 border-b border-gray-700 sticky top-0">
-          После патча
-        </div>
-        {patchLines.map((line, i) => {
-          const oLine = origLines[i] ?? ''
-          const changed = line !== oLine
+      <div className="space-y-0.5">
+        <div className="text-gray-400 px-2 py-1 bg-gray-700/50 rounded text-center">После</div>
+        {Array.from({ length: maxLen }, (_, i) => {
+          const line    = patchedLines[i] ?? ''
+          const changed = line !== (origLines[i] ?? '')
           return (
-            <div key={i} className={`flex px-3 py-0.5 ${changed ? 'bg-green-950/40' : ''}`}>
-              <span className="text-gray-600 w-8 shrink-0 select-none">{i + 1}</span>
-              <span className={`whitespace-pre-wrap break-all ${changed ? 'text-green-300' : 'text-gray-300'}`}>
-                {line || '\u00a0'}
-              </span>
+            <div
+              key={i}
+              className={`px-2 py-0.5 rounded whitespace-pre-wrap break-all ${
+                changed ? 'bg-green-900/40 text-green-300' : 'text-gray-300'
+              }`}
+            >
+              {line || '\u00a0'}
             </div>
           )
         })}
@@ -48,72 +49,67 @@ function DiffViewer({ original, patched }: { original: string; patched: string }
   )
 }
 
-// ── Patch Card ─────────────────────────────────────────────────────────────────
+// ── PatchCard ─────────────────────────────────────────────────────────────────
 
-function PatchCard({ patch, canAct, onRefresh }: {
-  patch: any
-  canAct: boolean
-  onRefresh: () => void
+function PatchCard({ patch, canAct, onAction }: {
+  patch:    any
+  canAct:   boolean
+  onAction: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [diffData, setDiffData] = useState<any>(null)
-  const [loadingDiff, setLoadingDiff] = useState(false)
-  const [acting, setActing] = useState(false)
+  const [acting,   setActing]   = useState(false)
 
-  const statusColor: Record<string, string> = {
-    pending:  'bg-yellow-500/20 text-yellow-400',
-    approved: 'bg-blue-500/20 text-blue-400',
-    applied:  'bg-green-500/20 text-green-400',
-    rejected: 'bg-red-500/20 text-red-400',
-    failed:   'bg-red-500/20 text-red-400',
-  }
-
-  const toggleDiff = async () => {
-    if (expanded) { setExpanded(false); return }
+  const loadDiff = async () => {
     if (!diffData) {
-      setLoadingDiff(true)
       try {
-        const d = await api.get<any>(`/patches/${patch.id}/diff`)
+        const d = await patchesApi.diff(patch.id)
         setDiffData(d)
       } catch { /* ignore */ }
-      setLoadingDiff(false)
     }
-    setExpanded(true)
+    setExpanded(v => !v)
   }
 
   const act = async (action: 'approve' | 'reject') => {
     setActing(true)
     try {
       if (action === 'approve') await patchesApi.approve(patch.id)
-      else await patchesApi.reject(patch.id)
-      onRefresh()
-    } catch { /* ignore */ } finally {
+      else                      await patchesApi.reject(patch.id)
+      onAction()
+    } catch (e: any) {
+      alert(`Ошибка: ${e.message}`)
+    } finally {
       setActing(false)
     }
   }
 
+  const statusColor: Record<string, string> = {
+    pending:  'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
+    approved: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+    applied:  'bg-green-900/50 text-green-300 border-green-700/50',
+    rejected: 'bg-red-900/50 text-red-300 border-red-700/50',
+    failed:   'bg-red-900/50 text-red-300 border-red-700/50',
+  }
+
   return (
     <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-      <div className="p-4 flex items-start gap-4">
+      <div className="p-4 flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="text-sm font-semibold text-white">#{patch.id}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[patch.status] ?? 'bg-gray-600 text-gray-300'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`inline-block text-xs px-2 py-0.5 rounded border ${statusColor[patch.status] || 'bg-gray-700 text-gray-300 border-gray-600'}`}>
               {patch.status}
             </span>
-            <span className="text-xs text-gray-500">{patch.repo}</span>
+            <span className="text-xs text-gray-500">#{patch.id} · {patch.repo ?? 'ShortsProject'}</span>
           </div>
-          <p className="text-sm text-gray-300 font-mono truncate">{patch.file_path}</p>
-          <p className="text-sm text-gray-400 mt-1">{patch.goal}</p>
-          <p className="text-xs text-gray-600 mt-1">{patch.created_at}</p>
+          <p className="text-sm font-medium truncate">{patch.file_path}</p>
+          <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{patch.goal}</p>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
-            onClick={toggleDiff}
+            onClick={loadDiff}
             className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
           >
-            {loadingDiff ? '…' : expanded ? 'Скрыть' : 'Diff'}
+            {diffData && expanded ? 'Скрыть' : 'Diff'}
           </button>
           {canAct && patch.status === 'pending' && (
             <>
@@ -153,7 +149,8 @@ function PatchCard({ patch, canAct, onRefresh }: {
 export default function PatchesPage() {
   const [data,    setData]    = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const role   = localStorage.getItem('role')
+  // [FIX#3] role берём из in-memory модуля, не из localStorage
+  const role   = getUserRole()
   const canAct = role === 'admin' || role === 'operator'
 
   const load = () => {
@@ -165,8 +162,8 @@ export default function PatchesPage() {
 
   useEffect(() => { load() }, [])
 
-  const pending  = data.filter(p => p.status === 'pending')
-  const rest     = data.filter(p => p.status !== 'pending')
+  const pending = data.filter(p => p.status === 'pending')
+  const rest    = data.filter(p => p.status !== 'pending')
 
   return (
     <div className="space-y-6">
@@ -189,28 +186,32 @@ export default function PatchesPage() {
       ) : data.length === 0 ? (
         <div className="text-gray-500 text-center py-12">Нет патчей</div>
       ) : (
-        <div className="space-y-4">
+        <>
           {pending.length > 0 && (
-            <>
-              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+            <section>
+              <h2 className="text-sm font-semibold text-yellow-400 mb-3 uppercase tracking-wider">
                 Ожидают одобрения ({pending.length})
               </h2>
-              {pending.map(p => (
-                <PatchCard key={p.id} patch={p} canAct={canAct} onRefresh={load} />
-              ))}
-            </>
+              <div className="space-y-3">
+                {pending.map(p => (
+                  <PatchCard key={p.id} patch={p} canAct={canAct} onAction={load} />
+                ))}
+              </div>
+            </section>
           )}
           {rest.length > 0 && (
-            <>
-              <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mt-6">
+            <section>
+              <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">
                 История ({rest.length})
               </h2>
-              {rest.map(p => (
-                <PatchCard key={p.id} patch={p} canAct={canAct} onRefresh={load} />
-              ))}
-            </>
+              <div className="space-y-3">
+                {rest.map(p => (
+                  <PatchCard key={p.id} patch={p} canAct={canAct} onAction={load} />
+                ))}
+              </div>
+            </section>
           )}
-        </div>
+        </>
       )}
     </div>
   )

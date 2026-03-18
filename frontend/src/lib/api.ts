@@ -4,7 +4,15 @@
  * Хранение токенов:
  *   access_token  — в памяти (переменная модуля). Теряется при F5 → авто-refresh.
  *   refresh_token — httpOnly cookie (ставится сервером, JS не видит).
- *   role          — localStorage (не секрет, нужен для UI-рендеринга до refresh).
+ *   role          — в памяти (переменная модуля). Восстанавливается при /refresh.
+ *
+ * [FIX#3] role перенесена из localStorage в in-memory хранилище.
+ * localStorage.getItem('role') → getUserRole()
+ * localStorage.setItem('role') → setUserRole()
+ * localStorage.removeItem('role') → setUserRole(null)
+ *
+ * После F5: RequireAuth → initAuth() → _refreshAccessToken() → setUserRole(data.role)
+ * Таким образом role восстанавливается из сервера, не из localStorage.
  */
 
 const BASE = '/api'
@@ -12,19 +20,32 @@ const BASE = '/api'
 // Access token — ТОЛЬКО в памяти, не в localStorage
 let accessToken: string | null = null
 
+// [FIX#3] Role — ТОЛЬКО в памяти, не в localStorage
+let _userRole: string | null = null
+
 export function getAccessToken(): string | null {
   return accessToken
 }
 
+// [FIX#3] Публичные функции управления role
+export function getUserRole(): string | null {
+  return _userRole
+}
+
+export function setUserRole(role: string | null): void {
+  _userRole = role
+}
+
 export function setAccessToken(at: string, role: string) {
   accessToken = at
-  // role сохраняем в localStorage — не секрет, нужен для sidebar/RequireAuth
-  localStorage.setItem('role', role)
+  // [FIX#3] role → in-memory, НЕ в localStorage
+  setUserRole(role)
 }
 
 export function clearAuth() {
   accessToken = null
-  localStorage.removeItem('role')
+  // [FIX#3] Очищаем in-memory role
+  setUserRole(null)
 }
 
 /**
@@ -48,7 +69,8 @@ async function _refreshAccessToken(): Promise<boolean> {
     }
     const data = await res.json()
     accessToken = data.access_token
-    if (data.role) localStorage.setItem('role', data.role)
+    // [FIX#3] role → in-memory вместо localStorage
+    if (data.role) setUserRole(data.role)
     return true
   } catch {
     clearAuth()
@@ -89,10 +111,10 @@ async function request<T>(
 }
 
 export const api = {
-  get:    <T>(path: string)                       => request<T>('GET',    path),
-  post:   <T>(path: string, body?: unknown)       => request<T>('POST',   path, body),
-  put:    <T>(path: string, body?: unknown)       => request<T>('PUT',    path, body),
-  delete: <T>(path: string)                       => request<T>('DELETE', path),
+  get:    <T>(path: string)               => request<T>('GET',    path),
+  post:   <T>(path: string, body?: unknown) => request<T>('POST',   path, body),
+  put:    <T>(path: string, body?: unknown) => request<T>('PUT',    path, body),
+  delete: <T>(path: string)               => request<T>('DELETE', path),
 }
 
 // Авторизация
@@ -109,7 +131,7 @@ export const auth = {
       throw new Error(err.detail || `HTTP ${res.status}`)
     }
     const data = await res.json()
-    // access_token → в память, role → localStorage
+    // [FIX#3] access_token → в память, role → in-memory (через setAccessToken)
     setAccessToken(data.access_token, data.role)
     return data
   },
@@ -125,67 +147,37 @@ export const auth = {
   },
 
   changePassword: (username: string, newPassword: string, oldPassword?: string) =>
-    api.post('/auth/change-password', {
-      username,
-      new_password: newPassword,
-      old_password: oldPassword,
-    }),
-
-  users: {
-    list:   ()                                                         => api.get<any[]>('/auth/users'),
-    create: (u: { username: string; password: string; role: string }) => api.post('/auth/users', u),
-    update: (id: number, role: string)                                 => api.put(`/auth/users/${id}`, { role }),
-  },
+    api.post('/auth/change-password', { username, new_password: newPassword, old_password: oldPassword }),
 }
 
-// Dashboard
+// Dashboard, agents, etc.
 export const dashboard = {
   get: () => api.get<any>('/dashboard'),
 }
 
-// Агенты
 export const agents = {
-  list:  ()                                      => api.get<any>('/agents'),
-  stop:  (project: string, name: string)         => api.post(`/agents/${project}/${name}/stop`),
-  start: (project: string, name: string)         => api.post(`/agents/${project}/${name}/start`),
+  list:  ()                              => api.get<any>('/agents'),
+  start: (project: string, name: string) => api.post<any>(`/agents/${project}/${name}/start`),
+  stop:  (project: string, name: string) => api.post<any>(`/agents/${project}/${name}/stop`),
 }
 
-// Патчи
 export const patches = {
-  list:    ()              => api.get<any[]>('/patches'),
-  approve: (id: number)    => api.post(`/patches/${id}/approve`),
-  reject:  (id: number)    => api.post(`/patches/${id}/reject`),
+  list:    ()          => api.get<any[]>('/patches'),
+  diff:    (id: number) => api.get<any>(`/patches/${id}/diff`),
+  approve: (id: number) => api.post<any>(`/patches/${id}/approve`),
+  reject:  (id: number) => api.post<any>(`/patches/${id}/reject`),
 }
 
-// Конфиги
 export const configs = {
-  getSP:            ()                                              => api.get<any>('/configs/ShortsProject'),
-  getSPSection:     (section: string)                              => api.get<any>(`/configs/ShortsProject/${section}`),
-  updateSP:         (section: string, updates: Record<string, string>) =>
-    api.put(`/configs/ShortsProject/${section}`, { updates }),
-  getPLSettings:    ()                                             => api.get<any>('/configs/PreLend/settings'),
-  updatePLSettings: (data: Record<string, any>)                   => api.put('/configs/PreLend/settings', data),
-  getZones:         ()                                             => api.get<any[]>('/configs/Orchestrator/zones'),
+  getSPConfig:       ()             => api.get<any>('/configs/ShortsProject'),
+  putSPConfig:       (body: any)    => api.put<any>('/configs/ShortsProject', body),
+  getPLSettings:     ()             => api.get<any>('/configs/PreLend/settings'),
+  putPLSettings:     (body: any)    => api.put<any>('/configs/PreLend/settings', body),
+  getAdvertisers:    ()             => api.get<any[]>('/configs/PreLend/advertisers'),
+  putAdvertiser:     (id: string, body: any) => api.put<any>(`/configs/PreLend/advertisers/${id}`, body),
 }
 
-// Рекламодатели
-export const advertisers = {
-  list:    ()                      => api.get<any[]>('/advertisers'),
-  get:     (id: string)            => api.get<any>(`/advertisers/${id}`),
-  create:  (data: any)             => api.post('/advertisers', data),
-  update:  (id: string, data: any) => api.put(`/advertisers/${id}`, data),
-  delete:  (id: string)            => api.delete(`/advertisers/${id}`),
-  geoData: {
-    get:    ()           => api.get<any>('/advertisers/geo-data'),
-    update: (data: any)  => api.put('/advertisers/geo-data', data),
-  },
-}
-
-// Аналитика
 export const analytics = {
-  funnel: (days = 7)             => api.get<any>(`/analytics/funnel?days=${days}`),
-  sp:     ()                     => api.get<any>('/analytics/sp'),
-  pl:     ()                     => api.get<any>('/analytics/pl'),
-  audit:  (limit = 50, project?: string) =>
-    api.get<any[]>(`/analytics/audit?limit=${limit}${project ? `&project=${project}` : ''}`),
+  get:         (params?: string) => api.get<any>(`/analytics${params ? '?' + params : ''}`),
+  planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
 }

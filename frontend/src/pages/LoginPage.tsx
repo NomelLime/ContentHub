@@ -14,8 +14,10 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      // auth.login() вызывает setAccessToken(access_token, role) внутри —
-      // access_token попадает в память, role в localStorage, refresh_token в httpOnly cookie
+      // auth.login() вызывает setAccessToken(access_token, role) →
+      // access_token → в память (module variable)
+      // role         → в память через setUserRole() [FIX#3: было localStorage]
+      // refresh_token → httpOnly cookie (браузер хранит автоматически)
       await auth.login(username, password)
       navigate('/')
     } catch (e: any) {

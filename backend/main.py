@@ -6,6 +6,10 @@ main.py — FastAPI entrypoint для ContentHub.
 
 Production:
     uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
+
+[FIX#7]  Expired sessions cleanup: раз в час в metrics_refresh_loop().
+[FIX#16] CORS: allow_methods и allow_headers явно ограничены.
+         Проверка что ALLOWED_ORIGINS не содержит "*" (несовместимо с allow_credentials=True).
 """
 
 from __future__ import annotations
@@ -57,6 +61,14 @@ async def lifespan(app: FastAPI):
             "Задайте переменную CONTENTHUB_SECRET_KEY в .env!"
         )
 
+    # [FIX#16] Проверка CORS — "*" несовместим с allow_credentials=True
+    if "*" in cfg.ALLOWED_ORIGINS:
+        logger.error(
+            "[ContentHub] ⛔ ALLOWED_ORIGINS содержит '*' — несовместимо с "
+            "allow_credentials=True! Браузеры заблокируют запросы с credentials. "
+            "Задайте конкретный origin в .env: ALLOWED_ORIGINS=https://yourdomain.com"
+        )
+
     # Инициализация БД
     init_db()
     logger.info("[ContentHub] БД инициализирована: %s", cfg.CONTENTHUB_DB)
@@ -83,7 +95,16 @@ async def lifespan(app: FastAPI):
 
 
 async def metrics_refresh_loop():
-    """Обновляет кэш метрик каждые METRICS_REFRESH_SEC секунд."""
+    """
+    Обновляет кэш метрик каждые METRICS_REFRESH_SEC секунд.
+
+    [FIX#7] Раз в ~60 итераций (~1 час при 60с интервале) удаляет истёкшие сессии.
+    Предотвращает неограниченный рост таблицы sessions при refresh token rotation.
+    """
+    _cleanup_counter = 0
+    # Один тик = METRICS_REFRESH_SEC секунд. Очищаем раз в час.
+    _cleanup_every_n = max(1, 3600 // max(cfg.METRICS_REFRESH_SEC, 1))
+
     while True:
         try:
             loop = asyncio.get_event_loop()
@@ -98,6 +119,23 @@ async def metrics_refresh_loop():
             break
         except Exception as exc:
             logger.warning("[MetricsRefresh] Ошибка: %s", exc)
+
+        # [FIX#7] Периодическая очистка истёкших сессий
+        _cleanup_counter += 1
+        if _cleanup_counter >= _cleanup_every_n:
+            _cleanup_counter = 0
+            try:
+                with get_db() as db:
+                    expired = db.execute(
+                        "DELETE FROM sessions WHERE expires_at < ?",
+                        (datetime.now(timezone.utc).isoformat(),),
+                    ).rowcount
+                    if expired:
+                        logger.info("[Cleanup] Удалено истёкших сессий: %d", expired)
+                    db.commit()
+            except Exception as exc:
+                logger.warning("[Cleanup] Ошибка очистки сессий: %s", exc)
+
         await asyncio.sleep(cfg.METRICS_REFRESH_SEC)
 
 
@@ -112,14 +150,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — ограничен через cfg.ALLOWED_ORIGINS (по умолчанию localhost:5173 для dev)
-# В продакшне задать ALLOWED_ORIGINS=https://yourdomain.com в .env
+# [FIX#16] CORS — явно ограниченные методы и заголовки вместо allow_methods=["*"]
+# allow_credentials=True несовместимо с allow_origins=["*"] — убедиться что ALLOWED_ORIGINS
+# не содержит "*" (проверяется в lifespan выше и при старте)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cfg.ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins     = cfg.ALLOWED_ORIGINS,
+    allow_credentials = True,
+    # Явный список вместо ["*"] — не пропускаем экзотические методы (TRACE, CONNECT и др.)
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    # Явный список заголовков — не пропускаем произвольные заголовки
+    allow_headers     = ["Authorization", "Content-Type"],
 )
 
 # Регистрация роутеров
