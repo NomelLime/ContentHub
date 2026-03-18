@@ -251,3 +251,31 @@ def update_splits(
         {"resource": "splits.json", "count": len(body), "ids": [s.id for s in body]},
     )
     return {"success": True, "splits_count": len(body)}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Plan Quality Scores
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/plan-quality")
+def get_plan_quality(
+    limit: int = Query(20, ge=1, le=100),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    """Оценки качества планов за последние N циклов (из orchestrator.db)."""
+    import sqlite3
+    if not cfg.ORC_DB.exists():
+        return []
+    with sqlite3.connect(str(cfg.ORC_DB)) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("""
+            SELECT pqs.id, pqs.plan_id, pqs.evaluated_at,
+                   pqs.views_delta_pct, pqs.ctr_delta_pct, pqs.cr_delta_pct,
+                   pqs.ban_delta, pqs.overall_score, pqs.model_used, pqs.zones_affected,
+                   ep.summary
+            FROM plan_quality_scores pqs
+            LEFT JOIN evolution_plans ep ON ep.id = pqs.plan_id
+            ORDER BY pqs.evaluated_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    return [dict(r) for r in rows]
