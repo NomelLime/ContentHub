@@ -92,3 +92,13 @@ WS_BROADCAST_SEC        = int(os.getenv("WS_BROADCAST_SEC",     "5"))
 # SSH tunnel: ssh -N -L 9090:127.0.0.1:9090 user@vps-ip
 PL_INTERNAL_API_URL = os.getenv("PL_INTERNAL_API_URL", "http://localhost:9090")
 PL_INTERNAL_API_KEY = os.getenv("PL_INTERNAL_API_KEY", "")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Shared integrations via Orchestrator (prelend_client и др.)
+# ──────────────────────────────────────────────────────────────────────────────
+# Добавляем корень Orchestrator в sys.path — чтобы `from integrations.prelend_client`
+# работало без дублирования кода.
+import sys as _sys
+_orc_path = str(ORCHESTRATOR_DIR)
+if _orc_path not in _sys.path:
+    _sys.path.insert(0, _orc_path)

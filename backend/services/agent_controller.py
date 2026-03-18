@@ -85,7 +85,7 @@ def get_sp_agents_status() -> List[Dict]:
 
 def get_pl_agents_status() -> List[Dict]:
     """Возвращает статусы агентов PreLend через Internal API."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     client = get_client()
     if not client.is_available():
         # API недоступен — возвращаем агентов со статусом UNKNOWN
@@ -114,7 +114,7 @@ def send_stop_request(project: str, agent_name: str) -> bool:
     elif project == "PreLend":
         if agent_upper not in PL_AGENTS:
             return False
-        from services.prelend_client import get_client
+        from integrations.prelend_client import get_client
         ok = get_client().stop_agent(agent_upper)
         if ok:
             logger.info("[AgentController] Стоп-сигнал → %s/%s (via API)", project, agent_upper)
@@ -142,7 +142,7 @@ def send_start_request(project: str, agent_name: str) -> bool:
     elif project == "PreLend":
         if agent_upper not in PL_AGENTS:
             return False
-        from services.prelend_client import get_client
+        from integrations.prelend_client import get_client
         ok = get_client().start_agent(agent_upper)
         if ok:
             logger.info("[AgentController] Старт-сигнал → %s/%s (via API)", project, agent_upper)

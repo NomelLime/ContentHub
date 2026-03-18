@@ -101,7 +101,7 @@ def _collect_sp_summary() -> Dict:
 
 def _collect_pl_summary() -> Dict:
     """Получает метрики PreLend через Internal API за 24ч."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     client = get_client()
 
     if not client.is_available():

@@ -52,8 +52,8 @@ ContentHub/
 │   │   ├── config_reader.py           # Чтение SP .env, PL конфигов через Internal API
 │   │   ├── config_writer.py           # Запись SP .env (атомично), PL конфигов через Internal API
 │   │   ├── metrics_collector.py       # Агрегация: analytics.json + PL API + orchestrator.db
-│   │   ├── agent_controller.py        # SP: agent_memory.json; PL: через Internal API
-│   │   └── prelend_client.py          # HTTP-клиент к PreLend Internal API (NEW)
+│   │   └── agent_controller.py        # SP: agent_memory.json; PL: через Internal API
+│   │   # prelend_client используется из Orchestrator/integrations/ через sys.path (config.py)
 │   └── models/
 │       └── __init__.py
 └── frontend/

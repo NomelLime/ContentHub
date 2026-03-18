@@ -121,25 +121,25 @@ def read_sp_env() -> Dict[str, Dict[str, Any]]:
 
 def read_pl_settings() -> Dict:
     """Читает PreLend/config/settings.json через Internal API."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     return get_client().get_settings()
 
 
 def read_pl_advertisers() -> List[Dict]:
     """Читает PreLend/config/advertisers.json через Internal API."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     return get_client().get_advertisers()
 
 
 def read_pl_geo_data() -> Dict:
     """Читает PreLend/config/geo_data.json через Internal API."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     return get_client().get_geo_data()
 
 
 def read_pl_splits() -> List[Dict]:
     """Читает PreLend/config/splits.json через Internal API."""
-    from services.prelend_client import get_client
+    from integrations.prelend_client import get_client
     return get_client().get_splits()
 
 
