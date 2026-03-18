@@ -198,7 +198,16 @@ video_funnel_links (id, sp_stem, platform, video_url, prelend_sub_id, linked_at)
 - `useWebSocket.ts` — авто-reconnect, delta merge в React state
 - `api.ts` — типизированные fetch-обёртки с JWT Bearer заголовком
 
-### Сессия 2 (16–18.03.2026) — Исправления + рефакторинг на Internal API
+### Сессия 3 (18.03.2026) — Безопасность перед боевым запуском
+
+| Файл | Проблема | Исправление |
+|------|----------|-------------|
+| `backend/config.py` | Дефолтный `SECRET_KEY` допускал старт с известным ключом | Авто-генерация `secrets.token_hex(32)` если ключ не задан; флаг `_is_temp_secret`; WARNING в лог |
+| `backend/main.py` | Сравнение с `_DEFAULT_SECRET` (побочный эффект) | Проверка `getattr(cfg, '_is_temp_secret', False)` |
+| `backend/api/routes/ws_route.py` | WebSocket без аутентификации — любой в LAN мог подключиться | JWT проверка через `?token=<JWT>` query param до `accept()`. Код `4001` при отказе |
+| `frontend/src/hooks/useWebSocket.ts` | Токен не передавался на WS | `localStorage.getItem('access_token')` добавлен в URL. При `code=4001` — нет авторекконекта |
+| `backend/api/routes/configs.py` | `PUT /PreLend/settings` принимал `body: dict` без типизации | Pydantic модели `PLAlertsUpdate` + `PLSettingsUpdate` с числовыми границами. FastAPI 422 при невалидных типах |
+| `backend/api/routes/auth.py` | Нет защиты от brute-force на `/login` | In-memory rate limiter: 5 попыток за 60 сек на username. 429 при превышении |
 
 **Исправления:**
 

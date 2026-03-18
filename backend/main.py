@@ -49,11 +49,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Проверка безопасности: предупредить если используется дефолтный SECRET_KEY
-    if cfg.SECRET_KEY == cfg._DEFAULT_SECRET:
+    # Проверка безопасности: предупредить если используется временный SECRET_KEY
+    if getattr(cfg, "_is_temp_secret", False):
         logger.warning(
-            "[ContentHub] ⚠️  ВНИМАНИЕ: используется дефолтный SECRET_KEY! "
-            "Задайте переменную CONTENTHUB_SECRET_KEY в .env перед продовым деплоем."
+            "[ContentHub] ⚠️  ВНИМАНИЕ: CONTENTHUB_SECRET_KEY не задан — "
+            "сгенерирован временный ключ. При рестарте все сессии сбросятся. "
+            "Задайте переменную CONTENTHUB_SECRET_KEY в .env!"
         )
 
     # Инициализация БД

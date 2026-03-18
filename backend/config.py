@@ -61,8 +61,22 @@ ORC_AGENT_MEMORY    = ORCHESTRATOR_DIR / "data" / "agent_memory.json"
 # ──────────────────────────────────────────────────────────────────────────────
 # Безопасность / JWT
 # ──────────────────────────────────────────────────────────────────────────────
+import secrets as _secrets
+
 _DEFAULT_SECRET     = "change-me-in-production-32-chars!"             # sentinel для startup-проверки
-SECRET_KEY          = os.getenv("CONTENTHUB_SECRET_KEY", _DEFAULT_SECRET)
+_is_temp_secret     = False
+
+_env_secret = os.getenv("CONTENTHUB_SECRET_KEY", "").strip()
+if _env_secret and _env_secret != _DEFAULT_SECRET:
+    SECRET_KEY = _env_secret
+else:
+    SECRET_KEY      = _secrets.token_hex(32)
+    _is_temp_secret = True
+    import logging as _log
+    _log.getLogger(__name__).warning(
+        "CONTENTHUB_SECRET_KEY не задан — сгенерирован временный ключ. "
+        "При рестарте все JWT-сессии сбросятся. Задайте ключ в .env!"
+    )
 ACCESS_TOKEN_EXPIRE_MINUTES  = int(os.getenv("ACCESS_TOKEN_EXPIRE_MIN",  "60"))
 REFRESH_TOKEN_EXPIRE_DAYS    = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 

@@ -13,10 +13,10 @@ GET  /api/configs/Orchestrator/zones     → зоны доверия
 
 from __future__ import annotations
 
-from typing import Annotated, Dict
+from typing import Annotated, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from services.auth import log_audit, require_operator, require_viewer
 from services.config_reader import (
@@ -87,49 +87,52 @@ def get_pl_settings(user: Annotated[dict, Depends(require_viewer)]):
     return read_pl_settings()
 
 
-_PL_SETTINGS_ALLOWED_KEYS = {
-    "alerts", "default_offer_url", "cloak_template",
-    "postback_token", "test_conversion_day",
-}
+# ── Pydantic-модели для PreLend settings ─────────────────────────────────────
+
+class PLAlertsUpdate(BaseModel):
+    """Числовые пороги алертов. FastAPI вернёт 422 при невалидных типах."""
+    bot_pct_per_hour:       Optional[float] = Field(None, ge=0, le=100)
+    offgeo_pct_per_hour:    Optional[float] = Field(None, ge=0, le=100)
+    shave_threshold_pct:    Optional[float] = Field(None, ge=0, le=100)
+    landing_slow_ms:        Optional[int]   = Field(None, ge=100, le=30_000)
+    landing_down_alert_min: Optional[int]   = Field(None, ge=1,   le=1_440)
+
+
+class PLSettingsUpdate(BaseModel):
+    """Разрешённые поля для обновления settings.json PreLend."""
+    alerts:              Optional[PLAlertsUpdate] = None
+    default_offer_url:   Optional[str]            = Field(None, max_length=500)
+    cloak_template:      Optional[str]            = Field(None, max_length=100)
+    postback_token:      Optional[str]            = Field(None, max_length=200)
+    test_conversion_day: Optional[int]            = Field(None, ge=0, le=6)
 
 
 @router.put("/PreLend/settings")
 def update_pl_settings(
-    body: dict,
+    body: PLSettingsUpdate,
     user: Annotated[dict, Depends(require_operator)],
 ):
     """
     Обновляет PreLend/config/settings.json.
 
-    Whitelist верхнего уровня: alerts, default_offer_url, cloak_template,
-    postback_token, test_conversion_day.
-
-    Для вложенных dict (например alerts) — deep merge:
-    передаётся {"alerts": {"bot_pct_per_hour": 5}} → только bot_pct_per_hour обновится,
-    остальные ключи alerts сохранятся.
+    Принимает только строго типизированные поля (Pydantic 422 при невалидных значениях).
+    Для alerts — deep merge: передаётся только delta, остальные ключи сохраняются.
     """
-    if not isinstance(body, dict):
-        raise HTTPException(400, detail="Ожидается JSON объект")
-
-    forbidden = set(body.keys()) - _PL_SETTINGS_ALLOWED_KEYS
-    if forbidden:
-        raise HTTPException(
-            400,
-            detail=f"Недопустимые ключи: {forbidden}. Разрешены: {_PL_SETTINGS_ALLOWED_KEYS}",
-        )
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, detail="Пустое тело запроса")
 
     current = read_pl_settings()
 
-    # Однуровневый merge: для dict-значений объединяем поверхностно, для скалярных — заменяем
     merged = dict(current)
-    for key, value in body.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = {**merged[key], **value}
+    for key, value in updates.items():
+        if key == "alerts" and isinstance(value, dict) and isinstance(merged.get("alerts"), dict):
+            merged["alerts"] = {**merged["alerts"], **value}
         else:
             merged[key] = value
 
     write_pl_settings(merged, username=user["username"])
-    log_audit(user, "config_write", "PreLend", {"keys": list(body.keys())})
+    log_audit(user, "config_write", "PreLend", {"keys": list(updates.keys())})
     return {"success": True, "settings": merged}
 
 

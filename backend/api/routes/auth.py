@@ -14,6 +14,8 @@ PUT  /api/auth/users/{id}     → изменить роль (только admin)
 from __future__ import annotations
 
 import hashlib
+import time as _time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
@@ -35,6 +37,43 @@ import config as cfg
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+# ── Rate limiting для /login ───────────────────────────────────────────────────
+# In-memory: сбрасывается при рестарте — приемлемо для localhost-деплоя.
+# Защита по username: предотвращает перебор пароля конкретного пользователя.
+
+_MAX_LOGIN_ATTEMPTS = 5
+_LOGIN_WINDOW_SEC   = 60
+_login_failures: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_login_rate(username: str) -> None:
+    """Проверяет rate limit. Бросает HTTPException(429) при превышении."""
+    now = _time.time()
+    _login_failures[username] = [
+        t for t in _login_failures[username] if now - t < _LOGIN_WINDOW_SEC
+    ]
+    if len(_login_failures[username]) >= _MAX_LOGIN_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Слишком много неудачных попыток входа. "
+                f"Подождите {_LOGIN_WINDOW_SEC} секунд."
+            ),
+        )
+
+
+def _record_login_failure(username: str) -> None:
+    """Записывает неудачную попытку входа."""
+    _login_failures[username].append(_time.time())
+
+
+def _clear_login_failures(username: str) -> None:
+    """Сбрасывает счётчик при успешном логине."""
+    _login_failures.pop(username, None)
+
+
+# ── Эндпоинты ─────────────────────────────────────────────────────────────────
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -42,8 +81,11 @@ class LoginRequest(BaseModel):
 
 @router.post("/login")
 def login(body: LoginRequest):
+    _check_login_rate(body.username)   # 429 если превышен лимит попыток
+
     user = get_user_by_username(body.username)
     if not user or not verify_password(body.password, user["password_hash"]):
+        _record_login_failure(body.username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
 
     if user["password_hash"] == "__CHANGE_ME__":
@@ -51,6 +93,8 @@ def login(body: LoginRequest):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Установите пароль администратора: POST /api/auth/change-password",
         )
+
+    _clear_login_failures(body.username)   # сбрасываем счётчик при успехе
 
     access_token  = create_access_token(user["id"], user["username"], user["role"])
     raw_refresh, hashed_refresh = create_refresh_token()
@@ -127,11 +171,9 @@ def change_password(
     if not target:
         raise HTTPException(404, detail="Пользователь не найден")
 
-    # Не-admin может менять только свой пароль
     if user["role"] != "admin" and user["username"] != body.username:
         raise HTTPException(403, detail="Нет прав менять чужой пароль")
 
-    # При смене своего пароля нужен старый (если hash уже установлен)
     if target["password_hash"] != "__CHANGE_ME__" and user["role"] != "admin":
         if not body.old_password or not verify_password(body.old_password, target["password_hash"]):
             raise HTTPException(400, detail="Неверный текущий пароль")
@@ -143,7 +185,7 @@ def change_password(
     return {"success": True}
 
 
-# ─── Управление пользователями (только admin) ─────────────────────────────
+# ── Управление пользователями (только admin) ──────────────────────────────────
 
 @router.get("/users")
 def list_users(user: Annotated[dict, Depends(require_admin)]):
@@ -157,7 +199,7 @@ def list_users(user: Annotated[dict, Depends(require_admin)]):
 class CreateUserRequest(BaseModel):
     username: str
     password: str
-    role:     str = "viewer"   # 'admin' | 'operator' | 'viewer'
+    role:     str = "viewer"
 
 
 @router.post("/users", status_code=201)
