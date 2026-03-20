@@ -1,0 +1,142 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ContentHub — .gitignore
+# Backend: Python 3.11+ FastAPI + Uvicorn + SQLite
+# Frontend: React 18 + Vite + TypeScript + Tailwind CSS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# BACKEND (backend/)
+# ───────────────────────────────────────────────────────────────────────────────
+
+# ── Секреты и окружение ────────────────────────────────────────────────────────
+.env
+.env.*
+backend/.env
+backend/.env.*
+!.env.example
+!backend/.env.example
+*.pem
+*.key
+
+# ── БД ContentHub ─────────────────────────────────────────────────────────────
+# contenthub.db — пользователи, сессии, audit_log, metrics_cache
+backend/contenthub.db
+backend/contenthub.db-wal
+backend/contenthub.db-shm
+backend/contenthub.db-journal
+data/contenthub.db
+data/contenthub.db-wal
+data/contenthub.db-shm
+# Схему коммитим
+!backend/db/schema.sql
+!data/.gitkeep
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Виртуальные окружения ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+backend/venv/
+backend/.venv/
+
+# ── Тесты и coverage ──────────────────────────────────────────────────────────
+.pytest_cache/
+backend/.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+junit.xml
+
+# ── Инструменты качества кода ─────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# FRONTEND (frontend/)
+# ───────────────────────────────────────────────────────────────────────────────
+
+# ── Node.js зависимости ───────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+.npm
+.pnp
+.pnp.js
+
+# ── Vite / сборка ─────────────────────────────────────────────────────────────
+dist/
+frontend/dist/
+build/
+frontend/build/
+.vite/
+frontend/.vite/
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
+*.tsbuildinfo
+frontend/*.tsbuildinfo
+
+# ── Переменные среды (Vite использует VITE_ префикс) ─────────────────────────
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ── Кэш инструментов (ESLint, Prettier) ──────────────────────────────────────
+.eslintcache
+frontend/.eslintcache
+.stylelintcache
+
+# ── Yarn / pnpm ───────────────────────────────────────────────────────────────
+.yarn/
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+pnpm-lock.yaml          # если не используешь pnpm — эту строку удали
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# ОБЩЕЕ
+# ───────────────────────────────────────────────────────────────────────────────
+
+# ── Логи ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ── Временные файлы ───────────────────────────────────────────────────────────
+temp/
+tmp/
+
+# ── Служебные файлы проекта ───────────────────────────────────────────────────
+status.md
+session*.md
+*_dev_plan.md
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+._*
+$RECYCLE.BIN/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.orig
+*.bak
