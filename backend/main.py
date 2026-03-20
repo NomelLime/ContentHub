@@ -17,8 +17,29 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
+
+# ⚠️ Убедиться что backend/ первым в PATH (чтобы избежать конфликта с Orchestrator's db/)
+_backend_dir = Path(__file__).parent
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
+# ⚠️ ВАЖНО: удалить Orchestrator из sys.path чтобы избежать конфликта с db/connection.py
+_orchestrator_dir = _backend_dir.parent / "Orchestrator"
+if str(_orchestrator_dir) in sys.path:
+    sys.path.remove(str(_orchestrator_dir))
+# Также удаляем его родительские директории если они там есть
+sys.path = [p for p in sys.path if not p.endswith("Orchestrator") and "Orchestrator" not in p]
+
+# ⚠️ КРИТИЧНО: load_dotenv() в САМОМ НАЧАЛЕ ДО импорта config и других модулей!
+from dotenv import load_dotenv
+
+# Явно указываем путь к .env — ищем в директории где лежит этот файл (backend/)
+_env_file = _backend_dir / ".env"
+load_dotenv(dotenv_path=_env_file)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
