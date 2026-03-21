@@ -86,7 +86,7 @@ try {
       }
       $plinkArgs += "$TunnelUser@$TunnelHost"
       $tunnelProc = Start-Process -FilePath "plink.exe" -ArgumentList $plinkArgs -PassThru `
-        -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
+        -NoNewWindow -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
     } elseif (-not [string]::IsNullOrWhiteSpace($TunnelTarget)) {
       Write-Host "==> Starting SSH tunnel: localhost:$TunnelLocalPort -> $TunnelRemoteHost`:$TunnelRemotePort via $TunnelTarget"
       $tunnelArgs = @(
@@ -95,7 +95,7 @@ try {
         $TunnelTarget
       )
       $tunnelProc = Start-Process -FilePath "ssh" -ArgumentList $tunnelArgs -PassThru `
-        -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
+        -NoNewWindow -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
     } else {
       Write-Host "==> SSH tunnel skipped (set CH_TUNNEL_TARGET or CH_TUNNEL_TOOL=plink)"
     }
@@ -106,12 +106,12 @@ try {
   Write-Host "==> Starting backend on :$BackendPort"
   $backendProc = Start-Process -FilePath "python" -ArgumentList @(
     "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "$BackendPort", "--workers", "1"
-  ) -PassThru -WorkingDirectory $backendDir -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr
+  ) -PassThru -NoNewWindow -WorkingDirectory $backendDir -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr
 
   Write-Host "==> Starting frontend preview on :$FrontendPort"
   $frontendProc = Start-Process -FilePath "cmd.exe" -ArgumentList @(
     "/c", "npm run preview -- --host 0.0.0.0 --port $FrontendPort"
-  ) -PassThru -WorkingDirectory $frontendDir -RedirectStandardOutput $frontendOut -RedirectStandardError $frontendErr
+  ) -PassThru -NoNewWindow -WorkingDirectory $frontendDir -RedirectStandardOutput $frontendOut -RedirectStandardError $frontendErr
 
   Write-Host ""
   Write-Host "ContentHub started:"
