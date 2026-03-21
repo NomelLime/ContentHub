@@ -39,6 +39,10 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+# extra explicit ignore for backend route bytecode
+backend/api/routes/__pycache__/
+backend/api/routes/__pycache__/*.pyc
+backend/api/routes/__pycache__/__*.pyc
 
 # ── Виртуальные окружения ─────────────────────────────────────────────────────
 venv/
