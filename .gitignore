@@ -140,3 +140,5 @@ $RECYCLE.BIN/
 *~
 *.orig
 *.bak
+/backend/api/routes/__pycache__
+backend/.env
