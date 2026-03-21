@@ -15,9 +15,11 @@ Production:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import sys
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,12 +70,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _agent_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # region agent log
+    try:
+        payload = {
+            "sessionId": "0398bc",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        log_path = Path(__file__).resolve().parent.parent / "debug-0398bc.log"
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # endregion
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Lifespan: инициализация и фоновые задачи
 # ──────────────────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _agent_log(
+        "H4",
+        "backend/main.py:lifespan_entry",
+        "Lifespan started",
+        {
+            "contenthubDb": str(cfg.CONTENTHUB_DB),
+            "dbParentExists": cfg.CONTENTHUB_DB.parent.exists(),
+            "host": cfg.HOST,
+            "port": cfg.PORT,
+        },
+    )
     # Проверка безопасности: предупредить если используется временный SECRET_KEY
     if getattr(cfg, "_is_temp_secret", False):
         logger.warning(
@@ -91,6 +124,15 @@ async def lifespan(app: FastAPI):
         )
 
     # Инициализация БД
+    _agent_log(
+        "H3",
+        "backend/main.py:init_db_source",
+        "Resolved init_db import source",
+        {
+            "module": getattr(init_db, "__module__", ""),
+            "sourceFile": inspect.getsourcefile(init_db) or "",
+        },
+    )
     init_db()
     logger.info("[ContentHub] БД инициализирована: %s", cfg.CONTENTHUB_DB)
 
