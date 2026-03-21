@@ -19,10 +19,25 @@ export default function FunnelChart() {
 
   useEffect(() => {
     setLoading(true)
-    analytics.funnel(days).then((res) => {
-      setData(res)
+    // #region agent log
+    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H2',location:'src/components/FunnelChart/FunnelChart.tsx:useEffect',message:'funnel load invoked',data:{days,hasFunnel:!!(analytics as any).funnel},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    try {
+      ;(analytics as any).funnel(days).then((res: any) => {
+        setData(res)
+        setLoading(false)
+      }).catch((e: any) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H4',location:'src/components/FunnelChart/FunnelChart.tsx:useEffect',message:'funnel request failed',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        setLoading(false)
+      })
+    } catch (e: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H2',location:'src/components/FunnelChart/FunnelChart.tsx:useEffect',message:'funnel call threw synchronously',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setLoading(false)
-    }).catch(() => setLoading(false))
+    }
   }, [days])
 
   const agg = data?.funnel?.[0]  // агрегат если нет детальных линков

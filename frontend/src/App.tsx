@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react'
-import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 // [FIX#3] импортируем getUserRole из api
 import { getAccessToken, initAuth, auth as authApi, clearAuth, getUserRole } from './lib/api'
 import clsx from 'clsx'
@@ -58,6 +58,7 @@ const NAV = [
 
 function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
+  const location = useLocation()
   // [FIX#3] role берём из in-memory модуля, не из localStorage
   // К моменту рендера Layout RequireAuth уже завершил initAuth(),
   // поэтому getUserRole() возвращает актуальное значение
@@ -68,6 +69,12 @@ function Layout({ children }: { children: React.ReactNode }) {
     await authApi.logout()   // удаляет httpOnly cookie + clearAuth() → setUserRole(null)
     navigate('/login')
   }
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H5',location:'src/App.tsx:Layout',message:'layout route changed',data:{pathname:location.pathname,role},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [location.pathname, role])
 
   return (
     <div className="flex h-screen overflow-hidden">

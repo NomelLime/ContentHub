@@ -21,6 +21,9 @@ export default function LoginPage() {
       await auth.login(username, password)
       navigate('/')
     } catch (e: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H2',location:'src/pages/LoginPage.tsx:submit',message:'login submit caught error',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setError(e.message)
     } finally {
       setLoading(false)

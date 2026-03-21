@@ -8,7 +8,22 @@ export default function UsersPage() {
   const [msg,     setMsg]     = useState<string | null>(null)
 
   const load = () => {
-    auth.users.list().then((d) => { setUsers(d); setLoading(false) }).catch(() => setLoading(false))
+    // #region agent log
+    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H1',location:'src/pages/UsersPage.tsx:load',message:'users load invoked',data:{hasAuthUsers:!!(auth as any).users,hasList:!!(auth as any).users?.list},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    try {
+      ;(auth as any).users.list().then((d: any[]) => { setUsers(d); setLoading(false) }).catch((e: any) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H4',location:'src/pages/UsersPage.tsx:load',message:'users list request failed',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        setLoading(false)
+      })
+    } catch (e: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H1',location:'src/pages/UsersPage.tsx:load',message:'users list call threw synchronously',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, [])

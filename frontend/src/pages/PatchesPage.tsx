@@ -155,9 +155,17 @@ export default function PatchesPage() {
 
   const load = () => {
     setLoading(true)
+    // #region agent log
+    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H3',location:'src/pages/PatchesPage.tsx:load',message:'patches load invoked',data:{hasList:!!patchesApi?.list},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     patchesApi.list()
       .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch((e: any) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H3',location:'src/pages/PatchesPage.tsx:load',message:'patches list failed',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        setLoading(false)
+      })
   }
 
   useEffect(() => { load() }, [])
