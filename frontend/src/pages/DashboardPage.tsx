@@ -55,7 +55,7 @@ export default function DashboardPage() {
         <MetricCard title="Просмотры (всего)"   value={sp.total_views?.toLocaleString() || '—'}  color="blue"   loading={loading} />
         <MetricCard title="Видео за 24ч"        value={sp.videos_24h  || '—'}                    color="green"  loading={loading} />
         <MetricCard title="Клики PreLend (24ч)" value={pl.clicks_24h?.toLocaleString() || '—'}  color="purple" loading={loading} />
-        <MetricCard title="CR PreLend (24ч)"    value={pl.cr_24h ? `${(pl.cr_24h * 100).toFixed(2)}%` : '—'} color="orange" loading={loading} />
+        <MetricCard title="CR PreLend (24ч)"    value={pl.cr_24h ? `${(pl.cr_24h * 100).toFixed(2)}%` : '—'} color="yellow" loading={loading} />
       </div>
 
       {/* Агенты */}
@@ -65,7 +65,7 @@ export default function DashboardPage() {
       />
 
       {/* Алерты */}
-      <AlertFeed notifications={orc.notifications || []} />
+      <AlertFeed />
     </div>
   )
 }

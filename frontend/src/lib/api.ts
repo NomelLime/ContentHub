@@ -148,12 +148,11 @@ export const auth = {
 
   changePassword: (username: string, newPassword: string, oldPassword?: string) =>
     api.post('/auth/change-password', { username, new_password: newPassword, old_password: oldPassword }),
-}
-
-auth.users = {
-  list:   ()                               => api.get<any[]>('/auth/users'),
-  create: (body: { username: string; password: string; role: string }) => api.post<any>('/auth/users', body),
-  update: (id: number, role: string)       => api.put<any>(`/auth/users/${id}/role`, { role }),
+  users: {
+    list:   () => api.get<any[]>('/auth/users'),
+    create: (body: { username: string; password: string; role: string }) => api.post<any>('/auth/users', body),
+    update: (id: number, role: string) => api.put<any>(`/auth/users/${id}/role`, { role }),
+  },
 }
 
 // Dashboard, agents, etc.
