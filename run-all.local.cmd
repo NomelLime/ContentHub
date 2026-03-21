@@ -9,7 +9,7 @@ REM ------------------------------------------------------------------
 set "CH_TUNNEL_TOOL=plink"
 set "CH_TUNNEL_HOST=199.192.22.121"
 set "CH_TUNNEL_USER=root"
-set "CH_TUNNEL_PASSWORD="
+set "CH_TUNNEL_PASSWORD=As03Q6JelKJVjSOsPGdari7PCxtEt92y44nm"
 
 REM Optional:
 set "CH_FRONTEND_PORT=4173"
