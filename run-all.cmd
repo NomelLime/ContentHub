@@ -36,32 +36,6 @@ REM If explicitly provided, pass normal SSH target to PowerShell script
 set "HAS_TUNNEL_TARGET=0"
 if not "%CH_TUNNEL_TARGET%"=="" set "HAS_TUNNEL_TARGET=1"
 
-REM -----------------------------------------------------------------
-REM Optional plink pre-tunnel mode:
-REM Starts separate plink process and then runs PowerShell launcher
-REM with -NoTunnel (to avoid duplicate tunnel from ssh).
-REM -----------------------------------------------------------------
-if /I "%CH_TUNNEL_TOOL%"=="plink" (
-  if "%CH_NO_TUNNEL%"=="1" goto run_ps
-
-  if "%CH_TUNNEL_HOST%"=="" (
-    echo [ERROR] CH_TUNNEL_HOST is required for plink mode.
-    exit /b 1
-  )
-  if "%CH_TUNNEL_USER%"=="" (
-    echo [ERROR] CH_TUNNEL_USER is required for plink mode.
-    exit /b 1
-  )
-
-  echo [INFO] Starting plink tunnel...
-  if not "%CH_TUNNEL_PASSWORD%"=="" (
-    start "ContentHub SSH Tunnel" plink.exe -batch -pw "%CH_TUNNEL_PASSWORD%" -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%
-  ) else (
-    start "ContentHub SSH Tunnel" plink.exe -batch -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%
-  )
-  set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -NoTunnel"
-)
-
 :run_ps
 echo [INFO] Starting ContentHub...
 if "%HAS_TUNNEL_TARGET%"=="1" (

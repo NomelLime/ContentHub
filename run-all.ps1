@@ -4,6 +4,10 @@ param(
   [int]$FrontendPort = 4173,
   [int]$BackendPort = 8000,
   [string]$TunnelTarget = $env:CH_TUNNEL_TARGET,
+  [string]$TunnelTool = $env:CH_TUNNEL_TOOL,
+  [string]$TunnelHost = $env:CH_TUNNEL_HOST,
+  [string]$TunnelUser = $env:CH_TUNNEL_USER,
+  [string]$TunnelPassword = $env:CH_TUNNEL_PASSWORD,
   [int]$TunnelLocalPort = 9090,
   [string]$TunnelRemoteHost = "127.0.0.1",
   [int]$TunnelRemotePort = 9090
@@ -16,6 +20,24 @@ function Stop-IfRunning {
   if ($null -ne $Proc -and -not $Proc.HasExited) {
     try { Stop-Process -Id $Proc.Id -Force -ErrorAction Stop } catch {}
   }
+}
+
+function Test-HttpOk {
+  param(
+    [string]$Url,
+    [int]$Attempts = 8,
+    [int]$DelayMs = 1000
+  )
+  for ($i = 0; $i -lt $Attempts; $i++) {
+    try {
+      $resp = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
+      if ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 500) {
+        return $true
+      }
+    } catch {}
+    Start-Sleep -Milliseconds $DelayMs
+  }
+  return $false
 }
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -48,17 +70,37 @@ try {
     Write-Host "==> Skip frontend build (flag -SkipBuild)"
   }
 
-  if (-not $NoTunnel -and -not [string]::IsNullOrWhiteSpace($TunnelTarget)) {
-    Write-Host "==> Starting SSH tunnel: localhost:$TunnelLocalPort -> $TunnelRemoteHost`:$TunnelRemotePort via $TunnelTarget"
-    $tunnelArgs = @(
-      "-N",
-      "-L", "$TunnelLocalPort`:$TunnelRemoteHost`:$TunnelRemotePort",
-      $TunnelTarget
-    )
-    $tunnelProc = Start-Process -FilePath "ssh" -ArgumentList $tunnelArgs -PassThru `
-      -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
+  if (-not $NoTunnel) {
+    if ($TunnelTool -eq "plink") {
+      if ([string]::IsNullOrWhiteSpace($TunnelHost) -or [string]::IsNullOrWhiteSpace($TunnelUser)) {
+        throw "CH_TUNNEL_TOOL=plink requires CH_TUNNEL_HOST and CH_TUNNEL_USER"
+      }
+      Write-Host "==> Starting PLINK tunnel: localhost:$TunnelLocalPort -> $TunnelRemoteHost`:$TunnelRemotePort via $TunnelUser@$TunnelHost"
+      $plinkArgs = @(
+        "-batch",
+        "-N",
+        "-L", "$TunnelLocalPort`:$TunnelRemoteHost`:$TunnelRemotePort"
+      )
+      if (-not [string]::IsNullOrWhiteSpace($TunnelPassword)) {
+        $plinkArgs += @("-pw", $TunnelPassword)
+      }
+      $plinkArgs += "$TunnelUser@$TunnelHost"
+      $tunnelProc = Start-Process -FilePath "plink.exe" -ArgumentList $plinkArgs -PassThru `
+        -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
+    } elseif (-not [string]::IsNullOrWhiteSpace($TunnelTarget)) {
+      Write-Host "==> Starting SSH tunnel: localhost:$TunnelLocalPort -> $TunnelRemoteHost`:$TunnelRemotePort via $TunnelTarget"
+      $tunnelArgs = @(
+        "-N",
+        "-L", "$TunnelLocalPort`:$TunnelRemoteHost`:$TunnelRemotePort",
+        $TunnelTarget
+      )
+      $tunnelProc = Start-Process -FilePath "ssh" -ArgumentList $tunnelArgs -PassThru `
+        -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr
+    } else {
+      Write-Host "==> SSH tunnel skipped (set CH_TUNNEL_TARGET or CH_TUNNEL_TOOL=plink)"
+    }
   } else {
-    Write-Host "==> SSH tunnel skipped (use -NoTunnel or set CH_TUNNEL_TARGET)"
+    Write-Host "==> SSH tunnel skipped (flag -NoTunnel)"
   }
 
   Write-Host "==> Starting backend on :$BackendPort"
@@ -76,6 +118,12 @@ try {
   Write-Host "  Frontend: http://localhost:$FrontendPort"
   Write-Host "  Backend : http://localhost:$BackendPort"
   Write-Host "  Logs    : $runtimeDir"
+  Write-Host ""
+  Write-Host "Health checks:"
+  $backendOk = Test-HttpOk -Url "http://localhost:$BackendPort/health"
+  if ($backendOk) { Write-Host "  [OK] Backend /health" } else { Write-Host "  [FAIL] Backend /health (see $backendErr)" }
+  $frontendOk = Test-HttpOk -Url "http://localhost:$FrontendPort"
+  if ($frontendOk) { Write-Host "  [OK] Frontend root" } else { Write-Host "  [FAIL] Frontend root (see $frontendErr)" }
   Write-Host ""
   Write-Host "Press Ctrl+C to stop all processes."
 
