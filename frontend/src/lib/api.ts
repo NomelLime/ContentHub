@@ -54,9 +54,6 @@ export function clearAuth() {
  * Вызывается при загрузке страницы (F5) и при 401 ответе.
  */
 export async function initAuth(): Promise<boolean> {
-  // #region agent log
-  fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H3',location:'src/lib/api.ts:initAuth',message:'initAuth started',data:{hasAccessToken:!!accessToken},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return _refreshAccessToken()
 }
 
@@ -66,9 +63,6 @@ async function _refreshAccessToken(): Promise<boolean> {
       method:      'POST',
       credentials: 'include',   // браузер добавляет cookie автоматически
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H3',location:'src/lib/api.ts:_refreshAccessToken',message:'refresh response received',data:{status:res.status,ok:res.ok},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!res.ok) {
       clearAuth()
       return false
@@ -101,9 +95,6 @@ async function request<T>(
   })
 
   if (res.status === 401 && !retried) {
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H4',location:'src/lib/api.ts:request',message:'request got 401; trying refresh',data:{path,method,retried},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const ok = await _refreshAccessToken()
     if (ok) return request<T>(method, path, body, true)
     clearAuth()
@@ -129,29 +120,17 @@ export const api = {
 // Авторизация
 export const auth = {
   login: async (username: string, password: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H1',location:'src/lib/api.ts:auth.login',message:'login request started',data:{usernameLength:username.length,passwordLength:password.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const res = await fetch(`${BASE}/auth/login`, {
       method:      'POST',
       headers:     { 'Content-Type': 'application/json' },
       credentials: 'include',   // сервер ставит cookie refresh_token в Set-Cookie
       body:        JSON.stringify({ username, password }),
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H1',location:'src/lib/api.ts:auth.login',message:'login response received',data:{status:res.status,ok:res.ok},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      // #region agent log
-      fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H2',location:'src/lib/api.ts:auth.login',message:'login failed response payload',data:{detail:err?.detail||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       throw new Error(err.detail || `HTTP ${res.status}`)
     }
     const data = await res.json()
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'login-debug-1',hypothesisId:'H5',location:'src/lib/api.ts:auth.login',message:'login succeeded',data:{hasAccessToken:!!data?.access_token,role:data?.role||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     // [FIX#3] access_token → в память, role → in-memory (через setAccessToken)
     setAccessToken(data.access_token, data.role)
     return data

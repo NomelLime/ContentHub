@@ -19,16 +19,10 @@ export default function FunnelChart() {
 
   useEffect(() => {
     setLoading(true)
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H2',location:'src/components/FunnelChart/FunnelChart.tsx:useEffect',message:'funnel load invoked',data:{days,hasFunnel:!!(analytics as any).funnel},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     analytics.funnel(days).then((res) => {
       setData(res)
       setLoading(false)
     }).catch((e: any) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pages-debug-1',hypothesisId:'H4',location:'src/components/FunnelChart/FunnelChart.tsx:useEffect',message:'funnel request failed',data:{message:e?.message||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setLoading(false)
     })
   }, [days])
