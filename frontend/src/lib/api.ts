@@ -171,6 +171,12 @@ export const auth = {
     api.post('/auth/change-password', { username, new_password: newPassword, old_password: oldPassword }),
 }
 
+auth.users = {
+  list:   ()                               => api.get<any[]>('/auth/users'),
+  create: (body: { username: string; password: string; role: string }) => api.post<any>('/auth/users', body),
+  update: (id: number, role: string)       => api.put<any>(`/auth/users/${id}/role`, { role }),
+}
+
 // Dashboard, agents, etc.
 export const dashboard = {
   get: () => api.get<any>('/dashboard'),
@@ -190,6 +196,9 @@ export const patches = {
 }
 
 export const configs = {
+  getSP:            ()             => api.get<any>('/configs/ShortsProject'),
+  updateSP:         (section: string, updates: Record<string, string>) =>
+    api.put<any>(`/configs/ShortsProject/${section}`, { updates }),
   getSPConfig:       ()             => api.get<any>('/configs/ShortsProject'),
   putSPConfig:       (body: any)    => api.put<any>('/configs/ShortsProject', body),
   getPLSettings:     ()             => api.get<any>('/configs/PreLend/settings'),
@@ -205,6 +214,7 @@ export const advertisers = {
 }
 
 export const analytics = {
+  funnel:      (days = 7)        => api.get<any>(`/analytics/funnel?days=${days}`),
   get:         (params?: string) => api.get<any>(`/analytics${params ? '?' + params : ''}`),
   planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
 }

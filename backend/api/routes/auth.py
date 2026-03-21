@@ -27,6 +27,7 @@ from services.auth import (
     create_access_token,
     create_refresh_token,
     get_user_by_username,
+    hash_password,
     log_audit,
     require_operator,
     require_viewer,
@@ -52,6 +53,17 @@ class UserInfo(BaseModel):
     id:       int
     username: str
     role:     str
+    last_login: Optional[str] = None
+
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UserRoleUpdateRequest(BaseModel):
+    role: str
 
 
 class SuccessResponse(BaseModel):
@@ -242,8 +254,66 @@ def logout(
 def list_users(user: Annotated[dict, Depends(require_operator)]):
     """Список всех пользователей (admin/operator)."""
     with get_db() as db:
-        rows = db.execute("SELECT id, username, role FROM users ORDER BY id").fetchall()
+        rows = db.execute("SELECT id, username, role, last_login FROM users ORDER BY id").fetchall()
     return [dict(r) for r in rows]
+
+
+@router.post("/users", response_model=SuccessResponse)
+def create_user(
+    body: UserCreateRequest,
+    user: Annotated[dict, Depends(require_operator)],
+):
+    """Создаёт нового пользователя (admin/operator)."""
+    allowed_roles = {"viewer", "operator", "admin"}
+    if body.role not in allowed_roles:
+        raise HTTPException(400, detail=f"Недопустимая роль: {body.role}")
+    if len(body.password) < 8:
+        raise HTTPException(400, detail="Пароль должен быть не менее 8 символов")
+
+    with get_db() as db:
+        existing = db.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (body.username,),
+        ).fetchone()
+        if existing:
+            raise HTTPException(409, detail="Пользователь с таким логином уже существует")
+
+        db.execute(
+            "INSERT INTO users (username, password_hash, role, last_login) VALUES (?,?,?,NULL)",
+            (body.username, hash_password(body.password), body.role),
+        )
+        db.commit()
+
+    log_audit(user, "user_create", "Auth", {"username": body.username, "role": body.role})
+    return {"success": True, "message": "Пользователь создан"}
+
+
+@router.put("/users/{user_id}/role", response_model=SuccessResponse)
+def update_user_role(
+    user_id: int,
+    body: UserRoleUpdateRequest,
+    user: Annotated[dict, Depends(require_operator)],
+):
+    """Меняет роль пользователя (admin/operator)."""
+    allowed_roles = {"viewer", "operator", "admin"}
+    if body.role not in allowed_roles:
+        raise HTTPException(400, detail=f"Недопустимая роль: {body.role}")
+
+    with get_db() as db:
+        target = db.execute("SELECT id, username, role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not target:
+            raise HTTPException(404, detail="Пользователь не найден")
+
+        db.execute("UPDATE users SET role = ? WHERE id = ?", (body.role, user_id))
+        db.commit()
+
+    log_audit(
+        user,
+        "user_role_update",
+        "Auth",
+        {"user_id": user_id, "username": target["username"], "old_role": target["role"], "new_role": body.role},
+    )
+    return {"success": True, "message": "Роль обновлена"}
 
 
 @router.post("/change-password", response_model=SuccessResponse)
