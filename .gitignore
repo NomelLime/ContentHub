@@ -143,3 +143,4 @@ $RECYCLE.BIN/
 /backend/api/routes/__pycache__
 backend/.env
 backend/api/routes/__pycache__/auth.cpython-312.pyc
+run-all.local.cmd
