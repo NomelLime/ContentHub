@@ -6,34 +6,11 @@ config.py — конфигурация ContentHub.
 """
 
 import os
-import json
-import time
 from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
-
-_DEBUG_LOG_PATH = Path(__file__).resolve().parent.parent / "debug-0398bc.log"
-
-
-def _agent_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
-    # region agent log
-    try:
-        payload = {
-            "sessionId": "0398bc",
-            "runId": "pre-fix",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with _DEBUG_LOG_PATH.open("a", encoding="utf-8") as _f:
-            _f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # endregion
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Директория ContentHub
@@ -49,29 +26,7 @@ if not _github_root_raw:
     _fallback_root = BASE_DIR.parent
     if (_fallback_root / "ShortsProject").exists() and (_fallback_root / "PreLend").exists() and (_fallback_root / "Orchestrator").exists():
         _github_root_raw = str(_fallback_root)
-        _agent_log(
-            "H5",
-            "backend/config.py:GITHUB_ROOT_fallback",
-            "GITHUB_ROOT was missing, fallback to sibling projects root",
-            {"fallbackRoot": _github_root_raw},
-        )
-_agent_log(
-    "H1",
-    "backend/config.py:GITHUB_ROOT",
-    "Loaded GITHUB_ROOT from environment",
-    {
-        "hasValue": bool(_github_root_raw),
-        "valuePreview": _github_root_raw[:120],
-        "cwd": str(Path.cwd()),
-    },
-)
 if not _github_root_raw:
-    _agent_log(
-        "H1",
-        "backend/config.py:GITHUB_ROOT",
-        "GITHUB_ROOT is missing and will raise EnvironmentError",
-        {},
-    )
     raise EnvironmentError(
         "Задайте GITHUB_ROOT в .env — "
         "путь к директории, в которой лежат ShortsProject, PreLend и Orchestrator. "
@@ -184,14 +139,3 @@ import sys as _sys
 _orc_path = str(ORCHESTRATOR_DIR)
 if _orc_path not in _sys.path:
     _sys.path.append(_orc_path)
-_agent_log(
-    "H3",
-    "backend/config.py:sys_path",
-    "Orchestrator path handling completed",
-    {
-        "orcPath": _orc_path,
-        "orcPathExists": ORCHESTRATOR_DIR.exists(),
-        "presentInSysPath": _orc_path in _sys.path,
-        "sysPathHead": _sys.path[:5],
-    },
-)
