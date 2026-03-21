@@ -37,18 +37,6 @@ GITHUB_ROOT = Path(_github_root_raw)
 SHORTS_PROJECT_DIR  = Path(os.getenv("SP_DIR",   str(GITHUB_ROOT / "ShortsProject")))
 PRELEND_DIR         = Path(os.getenv("PL_DIR",   str(GITHUB_ROOT / "PreLend")))
 ORCHESTRATOR_DIR    = Path(os.getenv("ORC_DIR",  str(GITHUB_ROOT / "Orchestrator")))
-_agent_log(
-    "H2",
-    "backend/config.py:project_dirs",
-    "Resolved managed project directories",
-    {
-        "githubRootExists": GITHUB_ROOT.exists(),
-        "shortsExists": SHORTS_PROJECT_DIR.exists(),
-        "prelendExists": PRELEND_DIR.exists(),
-        "orchestratorExists": ORCHESTRATOR_DIR.exists(),
-        "githubRoot": str(GITHUB_ROOT),
-    },
-)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Файлы ShortsProject
