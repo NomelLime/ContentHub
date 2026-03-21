@@ -263,3 +263,53 @@ PreLend теперь на VPS. Все операции через HTTP к Intern
 |--------|---------|------|
 | `bb14558` | 10 файлов | FIX#3 role in-memory, FIX#6 token rotation, FIX#7 sessions cleanup, FIX#9 response_model, FIX#16 CORS |
 | `ee5ceaa` | conftest.py, test_patches.py | reset_rate_limiter fixture, diff 503 |
+
+---
+
+### Сессия 6 (21.03.2026) — Инцидент деплоя на новой машине (Windows) и восстановление
+
+**Симптомы:**
+- `Error loading ASGI app. Could not import module "main"` при запуске из корня `ContentHub/`.
+- `module 'config' has no attribute 'DB_PATH'` при старте lifespan.
+- `OSError: Задайте GITHUB_ROOT ...` несмотря на наличие `.env`.
+- `HTTP 403` от `http://localhost:9090/agents` и `/metrics` (Invalid or missing API key).
+- После очистки debug-кода: `NameError: _agent_log is not defined`.
+
+**Корневые причины:**
+1. Неверная точка запуска (`uvicorn main:app` из `ContentHub/`, а не из `ContentHub/backend`).
+2. Конфликт импортов из-за порядка `sys.path`: подхватывался `Orchestrator/db/connection.py` вместо `ContentHub/backend/db/connection.py`.
+3. `.env` читался не жёстко из `backend/.env`; плюс в одном из прогонов `GITHUB_ROOT` был закомментирован.
+4. Несовпадение/неподхват `PL_INTERNAL_API_KEY` между ContentHub и PreLend Internal API (systemd env на VPS).
+5. Человеческая ошибка при ручной очистке instrumentation (оставшийся вызов `_agent_log`).
+
+**Исправлено в коде ContentHub:**
+- `backend/config.py`:
+  - `load_dotenv(dotenv_path=BASE_DIR / ".env")` — жёсткая загрузка env из `backend`.
+  - fallback для `GITHUB_ROOT`: если не задан, берётся родительская директория при наличии `ShortsProject/PreLend/Orchestrator`.
+  - путь `Orchestrator` добавляется в `sys.path` через `append`, чтобы не перехватывать `backend/db`.
+- Удалена временная debug-instrumentation и остаточные вызовы `_agent_log`.
+
+**Рантайм-верификация (финал):**
+- `uvicorn main:app --port 8000` из `ContentHub/backend` — старт успешный.
+- `GET /health` -> `200 OK`.
+- БД инициализируется: лог `БД инициализирована`.
+
+**Операционные команды (актуальные):**
+```bash
+# Windows (из backend):
+cd C:\Users\MSI-Vector16\Documents\GitHub\ContentHub\backend
+uvicorn main:app --port 8000
+
+# Альтернатива запуску из корня ContentHub:
+uvicorn backend.main:app --port 8000
+```
+
+**Создание/обновление admin (one-liner, Windows CMD):**
+```bash
+cd C:\Users\MSI-Vector16\Documents\GitHub\ContentHub\backend && python -c "import sqlite3, config as cfg; from services.auth import hash_password; conn=sqlite3.connect(str(cfg.CONTENTHUB_DB)); conn.execute(\"INSERT OR REPLACE INTO users (username, password_hash, role) VALUES (?, ?, ?)\", (\"admin\", hash_password(\"1234567\"), \"admin\")); conn.commit(); print(\"admin upserted\"); conn.close()"
+```
+
+**Проверка admin (one-liner):**
+```bash
+cd C:\Users\MSI-Vector16\Documents\GitHub\ContentHub\backend && python -c "import sqlite3, config as cfg; conn=sqlite3.connect(str(cfg.CONTENTHUB_DB)); conn.row_factory=sqlite3.Row; row=conn.execute(\"SELECT username, role FROM users WHERE username=?\", (\"admin\",)).fetchone(); print(dict(row) if row else \"admin not found\"); conn.close()"
+```

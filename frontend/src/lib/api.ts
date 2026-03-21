@@ -16,6 +16,9 @@
  */
 
 const BASE = '/api'
+// #region agent log
+fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pre-fix',hypothesisId:'H4',location:'src/lib/api.ts:19',message:'api.ts module evaluated',data:{base:BASE},timestamp:Date.now()})}).catch(()=>{});
+// #endregion
 
 // Access token — ТОЛЬКО в памяти, не в localStorage
 let accessToken: string | null = null
