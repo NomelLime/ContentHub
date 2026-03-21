@@ -313,3 +313,41 @@ cd C:\Users\MSI-Vector16\Documents\GitHub\ContentHub\backend && python -c "impor
 ```bash
 cd C:\Users\MSI-Vector16\Documents\GitHub\ContentHub\backend && python -c "import sqlite3, config as cfg; conn=sqlite3.connect(str(cfg.CONTENTHUB_DB)); conn.row_factory=sqlite3.Row; row=conn.execute(\"SELECT username, role FROM users WHERE username=?\", (\"admin\",)).fetchone(); print(dict(row) if row else \"admin not found\"); conn.close()"
 ```
+
+### Сессия 7 (21.03.2026) — Стабилизация UI, сборки и unified launcher
+
+**Что исправлено (кратко):**
+- FE fixed: падение `frontend` из-за отсутствующего экспорта `advertisers` в `api.ts`.
+- FE/API contract sync: добавлены методы `auth.users.*`, `configs.getSP/updateSP`, `analytics.funnel`.
+- BE auth API extended: добавлены endpoints `POST /api/auth/users`, `PUT /api/auth/users/{id}/role`; `GET /api/auth/users` возвращает `last_login`.
+- UI fixed: вкладки `Пользователи`, `Патчи`, `Аналитика`, `Конфиги` снова работают.
+- TS build fixed: устранены ошибки `TS2339/TS2322` (`auth.users`, `MetricCard color`, `AlertFeed props`), `npm run build` зелёный.
+- Agent UX: в `AgentPanel` добавлена кнопка `?` с кратким описанием каждого агента.
+
+**Локальный запуск в один файл (Windows):**
+- Добавлены:
+  - `run-all.ps1` — единый оркестратор (build + backend + frontend preview + tunnel).
+  - `run-all.cmd` — обёртка запуска.
+  - `run-all.shareable.cmd` — переносимый шаблон для git.
+  - `run-all.local.cmd` — локальный private launcher (в ignore).
+- Launcher переведён в режим **одного окна** (`-NoNewWindow`), с авто-остановкой дочерних процессов по `Ctrl+C`.
+- Добавлены health-check после старта:
+  - `Backend /health`
+  - `Frontend root`
+- Логи запуска: `ContentHub/.runtime/*.log`.
+
+**Git / ignore housekeeping:**
+- `run-all.local.cmd` исключён из отслеживания (через `.gitignore` + `git rm --cached`).
+- Усилен игнор Python cache:
+  - `backend/api/routes/__pycache__/`
+  - `backend/api/routes/__pycache__/*.pyc`
+
+**Текущий рабочий сценарий запуска:**
+```bash
+# One-click
+run-all.local.cmd
+
+# Проверка
+http://localhost:4173
+http://localhost:8000/health
+```
