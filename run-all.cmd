@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 
 REM -----------------------------------------------------------------------------
 REM ContentHub one-click launcher (Windows CMD wrapper)
@@ -26,15 +26,15 @@ if not exist "%PS1%" (
   exit /b 1
 )
 
-set "PS_ARGS=-ExecutionPolicy Bypass -File "%PS1%""
-
-if "%CH_SKIP_BUILD%"=="1" set "PS_ARGS=%PS_ARGS% -SkipBuild"
-if "%CH_NO_TUNNEL%"=="1"  set "PS_ARGS=%PS_ARGS% -NoTunnel"
-if not "%CH_FRONTEND_PORT%"=="" set "PS_ARGS=%PS_ARGS% -FrontendPort %CH_FRONTEND_PORT%"
-if not "%CH_BACKEND_PORT%"==""  set "PS_ARGS=%PS_ARGS% -BackendPort %CH_BACKEND_PORT%"
+set "PS_EXTRA_ARGS="
+if "%CH_SKIP_BUILD%"=="1" set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -SkipBuild"
+if "%CH_NO_TUNNEL%"=="1"  set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -NoTunnel"
+if not "%CH_FRONTEND_PORT%"=="" set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -FrontendPort %CH_FRONTEND_PORT%"
+if not "%CH_BACKEND_PORT%"==""  set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -BackendPort %CH_BACKEND_PORT%"
 
 REM If explicitly provided, pass normal SSH target to PowerShell script
-if not "%CH_TUNNEL_TARGET%"=="" set "PS_ARGS=%PS_ARGS% -TunnelTarget "%CH_TUNNEL_TARGET%""
+set "HAS_TUNNEL_TARGET=0"
+if not "%CH_TUNNEL_TARGET%"=="" set "HAS_TUNNEL_TARGET=1"
 
 REM -----------------------------------------------------------------
 REM Optional plink pre-tunnel mode:
@@ -53,19 +53,22 @@ if /I "%CH_TUNNEL_TOOL%"=="plink" (
     exit /b 1
   )
 
-  set "PLINK_CMD=plink.exe -batch -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%"
-  if not "%CH_TUNNEL_PASSWORD%"=="" (
-    set "PLINK_CMD=plink.exe -batch -pw "%CH_TUNNEL_PASSWORD%" -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%"
-  )
-
   echo [INFO] Starting plink tunnel...
-  start "ContentHub SSH Tunnel" cmd /c "%PLINK_CMD%"
-  set "PS_ARGS=%PS_ARGS% -NoTunnel"
+  if not "%CH_TUNNEL_PASSWORD%"=="" (
+    start "ContentHub SSH Tunnel" plink.exe -batch -pw "%CH_TUNNEL_PASSWORD%" -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%
+  ) else (
+    start "ContentHub SSH Tunnel" plink.exe -batch -N -L 9090:127.0.0.1:9090 %CH_TUNNEL_USER%@%CH_TUNNEL_HOST%
+  )
+  set "PS_EXTRA_ARGS=!PS_EXTRA_ARGS! -NoTunnel"
 )
 
 :run_ps
 echo [INFO] Starting ContentHub...
-powershell %PS_ARGS%
+if "%HAS_TUNNEL_TARGET%"=="1" (
+  powershell -ExecutionPolicy Bypass -File "%PS1%" !PS_EXTRA_ARGS! -TunnelTarget "%CH_TUNNEL_TARGET%"
+) else (
+  powershell -ExecutionPolicy Bypass -File "%PS1%" !PS_EXTRA_ARGS!
+)
 set "EXIT_CODE=%ERRORLEVEL%"
 
 if not "%EXIT_CODE%"=="0" (
