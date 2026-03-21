@@ -24,9 +24,6 @@ const STATUS_BADGE: Record<string, string> = {
 }
 
 export default function AdvertiserManager({ canEdit }: { canEdit: boolean }) {
-  // #region agent log
-  fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pre-fix',hypothesisId:'H1',location:'src/components/AdvertiserManager/AdvertiserManager.tsx:27',message:'AdvertiserManager render entered',data:{canEdit,advApiType:typeof advApi,advApiKeys:advApi?Object.keys(advApi):[]},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const [list,    setList]    = useState<Advertiser[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<string | null>(null)
@@ -34,9 +31,6 @@ export default function AdvertiserManager({ canEdit }: { canEdit: boolean }) {
   const [msg, setMsg] = useState<string | null>(null)
 
   const load = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pre-fix',hypothesisId:'H2',location:'src/components/AdvertiserManager/AdvertiserManager.tsx:36',message:'load() called before advApi.list',data:{hasListMethod:!!advApi?.list},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setLoading(true)
     advApi.list().then((data) => { setList(data); setLoading(false) }).catch(() => setLoading(false))
   }

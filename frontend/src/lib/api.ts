@@ -16,9 +16,6 @@
  */
 
 const BASE = '/api'
-// #region agent log
-fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'pre-fix',hypothesisId:'H4',location:'src/lib/api.ts:19',message:'api.ts module evaluated',data:{base:BASE},timestamp:Date.now()})}).catch(()=>{});
-// #endregion
 
 // Access token — ТОЛЬКО в памяти, не в localStorage
 let accessToken: string | null = null
@@ -181,11 +178,9 @@ export const configs = {
 }
 
 export const advertisers = {
-  // #region agent log
-  list: () => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H1',location:'src/lib/api.ts:182',message:'advertisers.list called',data:{},timestamp:Date.now()})}).catch(()=>{}), api.get<any[]>('/configs/PreLend/advertisers')),
-  update: (id: string, body: any) => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H5',location:'src/lib/api.ts:183',message:'advertisers.update called',data:{id},timestamp:Date.now()})}).catch(()=>{}), api.put<any>(`/configs/PreLend/advertisers/${id}`, body)),
-  delete: (id: string) => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H5',location:'src/lib/api.ts:184',message:'advertisers.delete called',data:{id},timestamp:Date.now()})}).catch(()=>{}), api.delete<any>(`/configs/PreLend/advertisers/${id}`)),
-  // #endregion
+  list:   ()                         => api.get<any[]>('/configs/PreLend/advertisers'),
+  update: (id: string, body: any)    => api.put<any>(`/configs/PreLend/advertisers/${id}`, body),
+  delete: (id: string)               => api.delete<any>(`/configs/PreLend/advertisers/${id}`),
 }
 
 export const analytics = {
