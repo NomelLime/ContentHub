@@ -40,7 +40,7 @@ try {
     Write-Host "==> Frontend build..."
     Push-Location $frontendDir
     try {
-      & npm run build
+      & cmd /c "npm run build"
     } finally {
       Pop-Location
     }
@@ -67,8 +67,8 @@ try {
   ) -PassThru -WorkingDirectory $backendDir -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr
 
   Write-Host "==> Starting frontend preview on :$FrontendPort"
-  $frontendProc = Start-Process -FilePath "npm" -ArgumentList @(
-    "run", "preview", "--", "--host", "0.0.0.0", "--port", "$FrontendPort"
+  $frontendProc = Start-Process -FilePath "cmd.exe" -ArgumentList @(
+    "/c", "npm run preview -- --host 0.0.0.0 --port $FrontendPort"
   ) -PassThru -WorkingDirectory $frontendDir -RedirectStandardOutput $frontendOut -RedirectStandardError $frontendErr
 
   Write-Host ""
