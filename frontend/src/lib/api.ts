@@ -180,6 +180,14 @@ export const configs = {
   putAdvertiser:     (id: string, body: any) => api.put<any>(`/configs/PreLend/advertisers/${id}`, body),
 }
 
+export const advertisers = {
+  // #region agent log
+  list: () => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H1',location:'src/lib/api.ts:182',message:'advertisers.list called',data:{},timestamp:Date.now()})}).catch(()=>{}), api.get<any[]>('/configs/PreLend/advertisers')),
+  update: (id: string, body: any) => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H5',location:'src/lib/api.ts:183',message:'advertisers.update called',data:{id},timestamp:Date.now()})}).catch(()=>{}), api.put<any>(`/configs/PreLend/advertisers/${id}`, body)),
+  delete: (id: string) => (fetch('http://127.0.0.1:7662/ingest/84dec7bc-d1eb-46fc-8bc0-42c57a11b413',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d76426'},body:JSON.stringify({sessionId:'d76426',runId:'post-fix',hypothesisId:'H5',location:'src/lib/api.ts:184',message:'advertisers.delete called',data:{id},timestamp:Date.now()})}).catch(()=>{}), api.delete<any>(`/configs/PreLend/advertisers/${id}`)),
+  // #endregion
+}
+
 export const analytics = {
   get:         (params?: string) => api.get<any>(`/analytics${params ? '?' + params : ''}`),
   planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
