@@ -99,15 +99,15 @@ def _collect_sp_summary() -> Dict:
     }
 
 
-def _collect_pl_summary() -> Dict:
-    """Получает метрики PreLend через Internal API за 24ч."""
+def _collect_pl_summary(period_hours: int = 24) -> Dict:
+    """Получает метрики PreLend через Internal API за period_hours."""
     from integrations.prelend_client import get_client
     client = get_client()
 
     if not client.is_available():
         return {"available": False, "error": "PreLend API недоступен"}
 
-    data = client.get_metrics(period_hours=24)
+    data = client.get_metrics(period_hours=period_hours)
     if not data:
         return {"available": False}
 
@@ -120,11 +120,13 @@ def _collect_pl_summary() -> Dict:
 
     return {
         "available":       True,
+        "period_hours":    period_hours,
         "clicks_24h":      clicks,
         "conversions_24h": conversions,
         "cr_24h":          cr,
         "bot_pct_24h":     bot_pct,
         "top_geo":         data.get("top_geo") or "—",
+        "geo_breakdown":   data.get("geo_breakdown") or [],
     }
 
 

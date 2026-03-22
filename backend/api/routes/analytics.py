@@ -167,8 +167,12 @@ def get_sp_analytics(user: Annotated[dict, Depends(require_viewer)]):
 
 
 @router.get("/pl")
-def get_pl_analytics(user: Annotated[dict, Depends(require_viewer)]):
-    return _collect_pl_summary()
+def get_pl_analytics(
+    period_hours: int = Query(24, ge=1, le=168),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    """Метрики PreLend за period_hours; geo_breakdown — сортировка на фронте."""
+    return _collect_pl_summary(period_hours=period_hours)
 
 
 @router.get("/audit")

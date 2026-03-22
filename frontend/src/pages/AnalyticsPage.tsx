@@ -1,10 +1,13 @@
 import React from 'react'
 import FunnelChart from '../components/FunnelChart/FunnelChart'
+import PlGeoTable from '../components/PlGeoTable/PlGeoTable'
 
 export default function AnalyticsPage() {
   return (
     <div className="space-y-8">
       <h1 className="text-2xl font-bold">Аналитика</h1>
+
+      <PlGeoTable />
 
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
         <h2 className="text-base font-semibold mb-1">Воронка: Видео → Конверсии</h2>

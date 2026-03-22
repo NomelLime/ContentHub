@@ -195,4 +195,6 @@ export const analytics = {
   funnel:      (days = 7)        => api.get<any>(`/analytics/funnel?days=${days}`),
   get:         (params?: string) => api.get<any>(`/analytics${params ? '?' + params : ''}`),
   planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
+  /** PreLend: сводка и geo_breakdown; period_hours 1–168 */
+  pl:          (periodHours = 24) => api.get<any>(`/analytics/pl?period_hours=${periodHours}`),
 }
