@@ -42,13 +42,13 @@ ContentHub/
 │   │   │   ├── patches.py             # GET/POST /api/patches/{id}/approve|reject (409 при race)
 │   │   │   ├── configs.py             # GET/PUT /api/configs/*
 │   │   │   ├── advertisers.py         # CRUD рекламодателей PreLend
-│   │   │   ├── analytics.py           # GET /api/analytics/*, /plan-quality
+│   │   │   ├── analytics.py           # GET /api/analytics/*, /pl?period_hours=, /plan-quality
 │   │   │   └── ws_route.py            # WebSocket /ws (JWT auth через ?token=)
 │   │   └── ws/
 │   │       └── broadcaster.py         # asyncio broadcast loop с diff-логикой
 │   ├── services/
 │   │   ├── auth.py                    # JWT create/verify, bcrypt, RBAC depends
-│   │   ├── metrics_collector.py       # Агрегация метрик из 3 проектов
+│   │   ├── metrics_collector.py       # Агрегация метрик; PreLend + geo_breakdown из /metrics
 │   │   ├── config_reader.py           # Чтение конфигов (SP, PreLend, Orchestrator)
 │   │   ├── config_writer.py           # Запись конфигов + approve/reject патчей (→ 409 при race)
 │   │   └── agent_controller.py        # Запись флагов в agent_memory.json
@@ -68,7 +68,7 @@ ContentHub/
         │   ├── DashboardPage.tsx      # getUserRole() [FIX#3]
         │   ├── PatchesPage.tsx        # getUserRole() + DiffViewer [FIX#3]
         │   ├── ConfigPage.tsx         # getUserRole() [FIX#3]
-        │   ├── AnalyticsPage.tsx      # FunnelChart
+        │   ├── AnalyticsPage.tsx      # FunnelChart + PlGeoTable (PreLend по ГЕО)
         │   └── UsersPage.tsx          # CRUD пользователей
         └── App.tsx                    # RequireAuth + Layout с getUserRole() [FIX#3]
 ```
@@ -351,3 +351,16 @@ run-all.local.cmd
 http://localhost:4173
 http://localhost:8000/health
 ```
+
+### Сессия 8 (22.03.2026) — Аналитика PreLend по ГЕО в UI
+
+| Файл | Изменение |
+|------|-----------|
+| `PreLend/internal_api/routes/metrics.py` | `GET /metrics` → поле **`geo_breakdown`** (массив по ISO-2: clicks, conversions, cr). |
+| `backend/services/metrics_collector.py` | `_collect_pl_summary(period_hours=…)` прокидывает `geo_breakdown` и `period_hours`. |
+| `backend/api/routes/analytics.py` | `GET /api/analytics/pl?period_hours=1..168`. |
+| `frontend/src/lib/api.ts` | `analytics.pl(periodHours)`. |
+| `frontend/src/components/PlGeoTable/PlGeoTable.tsx` (NEW) | Таблица со сортировкой по колонкам; период 24ч / 72ч / 7д. |
+| `frontend/src/pages/AnalyticsPage.tsx` | Подключён `PlGeoTable` над блоком воронки. |
+
+**Зависимость:** на VPS после обновления PreLend с `geo_breakdown` — **`systemctl restart prelend-internal-api`**, иначе ответ `/metrics` без нового поля.
