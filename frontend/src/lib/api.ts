@@ -181,14 +181,14 @@ export const configs = {
   putSPConfig:       (body: any)    => api.put<any>('/configs/ShortsProject', body),
   getPLSettings:     ()             => api.get<any>('/configs/PreLend/settings'),
   putPLSettings:     (body: any)    => api.put<any>('/configs/PreLend/settings', body),
-  getAdvertisers:    ()             => api.get<any[]>('/configs/PreLend/advertisers'),
-  putAdvertiser:     (id: string, body: any) => api.put<any>(`/configs/PreLend/advertisers/${id}`, body),
+  getAdvertisers:    ()             => api.get<any[]>('/advertisers'),
+  putAdvertiser:     (id: string, body: any) => api.put<any>(`/advertisers/${id}`, body),
 }
 
 export const advertisers = {
-  list:   ()                         => api.get<any[]>('/configs/PreLend/advertisers'),
-  update: (id: string, body: any)    => api.put<any>(`/configs/PreLend/advertisers/${id}`, body),
-  delete: (id: string)               => api.delete<any>(`/configs/PreLend/advertisers/${id}`),
+  list:   ()                         => api.get<any[]>('/advertisers'),
+  update: (id: string, body: any)    => api.put<any>(`/advertisers/${id}`, body),
+  delete: (id: string)               => api.delete<any>(`/advertisers/${id}`),
 }
 
 export const analytics = {
