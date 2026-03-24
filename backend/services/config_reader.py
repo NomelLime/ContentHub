@@ -143,6 +143,31 @@ def read_pl_splits() -> List[Dict]:
     return get_client().get_splits()
 
 
+def read_pl_templates() -> Dict[str, List[str]]:
+    """
+    Читает список доступных шаблонов PreLend.
+
+    Основной источник: Internal API (/templates).
+    Fallback (совместимость со старым Internal API): локальная файловая система.
+    """
+    from integrations.prelend_client import get_client
+
+    data = get_client().get_templates()
+    offers = data.get("offers", []) if isinstance(data, dict) else []
+    cloaked = data.get("cloaked", []) if isinstance(data, dict) else []
+    if offers or cloaked:
+        return {"offers": offers, "cloaked": cloaked}
+
+    templates_root = cfg.PRELEND_DIR / "templates"
+    result: Dict[str, List[str]] = {"offers": [], "cloaked": []}
+    for kind in ("offers", "cloaked"):
+        folder = templates_root / kind
+        if not folder.exists():
+            continue
+        result[kind] = sorted([p.stem for p in folder.glob("*.php") if p.is_file()])
+    return result
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Orchestrator
 # ──────────────────────────────────────────────────────────────────────────────

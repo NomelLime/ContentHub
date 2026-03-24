@@ -146,19 +146,77 @@ def write_sp_env(env_updates: Dict[str, str], username: str = "contenthub") -> N
 # ──────────────────────────────────────────────────────────────────────────────
 
 def write_pl_settings(data: Dict, username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/settings.json через Internal API."""
+    """
+    Перезаписывает PreLend/config/settings.json.
+
+    Основной путь: через Internal API.
+    Fallback (для legacy Internal API): прямая локальная запись файла.
+    """
     from integrations.prelend_client import get_client
-    ok = get_client().write_settings(data, source=f"contenthub:{username}")
-    if not ok:
-        raise RuntimeError("Не удалось записать PL settings через Internal API")
+    client = get_client()
+    ok = client.write_settings(data, source=f"contenthub:{username}")
+    if ok:
+        return
+
+    # Legacy fallback: если Internal API недоступен/несовместим, пишем локально.
+    try:
+        atomic_write_json(cfg.PL_SETTINGS, data)
+        _git_commit(
+            repo_dir=cfg.PRELEND_DIR,
+            file_path=cfg.PL_SETTINGS,
+            message=f"[ContentHub:{username}] PL settings update (fallback local write)",
+        )
+        logger.warning("[ConfigWriter] write_pl_settings: использован fallback на локальную запись")
+        # Важно: подтверждаем, что источник данных (Internal API) теперь тоже видит новые значения.
+        # Если нет — не считаем операцию успешной, иначе UI покажет ложный "успех".
+        remote = client.get_settings()
+        if isinstance(remote, dict):
+            for key, value in data.items():
+                if remote.get(key) != value:
+                    raise RuntimeError(
+                        "Internal API не подтвердил сохранение settings. "
+                        "Скорее всего запущена legacy версия API на другом инстансе."
+                    )
+    except Exception as exc:
+        raise RuntimeError("Не удалось записать PL settings через Internal API и локально") from exc
 
 
 def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None:
-    """Перезаписывает PreLend/config/advertisers.json через Internal API."""
+    """
+    Перезаписывает PreLend/config/advertisers.json.
+
+    Основной путь: через Internal API.
+    Fallback (для legacy Internal API): прямая локальная запись файла.
+    """
     from integrations.prelend_client import get_client
-    ok = get_client().write_advertisers(data, source=f"contenthub:{username}")
-    if not ok:
-        raise RuntimeError("Не удалось записать PL advertisers через Internal API")
+    client = get_client()
+    ok = client.write_advertisers(data, source=f"contenthub:{username}")
+    if ok:
+        return
+    try:
+        atomic_write_json(cfg.PL_ADVERTISERS, data)
+        _git_commit(
+            repo_dir=cfg.PRELEND_DIR,
+            file_path=cfg.PL_ADVERTISERS,
+            message=f"[ContentHub:{username}] PL advertisers update (fallback local write)",
+        )
+        logger.warning("[ConfigWriter] write_pl_advertisers: использован fallback на локальную запись")
+        remote = client.get_advertisers()
+        if isinstance(remote, list) and len(remote) == len(data):
+            # Сверяем минимум id + template/status как индикаторы успешной записи.
+            local_map = {str(a.get("id")): a for a in data}
+            for r in remote:
+                rid = str(r.get("id"))
+                if rid not in local_map:
+                    raise RuntimeError("Internal API вернул другой набор advertisers после fallback")
+                l = local_map[rid]
+                if r.get("template") != l.get("template") or r.get("status") != l.get("status"):
+                    raise RuntimeError(
+                        "Internal API не подтвердил сохранение advertisers. "
+                        "Вероятно, работает другой (legacy) источник."
+                    )
+    except Exception as exc:
+        raise RuntimeError("Не удалось записать PL advertisers через Internal API и локально") from exc
 
 
 def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "contenthub") -> bool:
@@ -170,7 +228,34 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
     if target is None:
         return False
     target.update(updates)
-    return client.write_advertisers(advertisers, source=f"contenthub:{username}")
+    if client.write_advertisers(advertisers, source=f"contenthub:{username}"):
+        return True
+    # Fallback на локальную запись
+    try:
+        atomic_write_json(cfg.PL_ADVERTISERS, advertisers)
+        _git_commit(
+            repo_dir=cfg.PRELEND_DIR,
+            file_path=cfg.PL_ADVERTISERS,
+            message=f"[ContentHub:{username}] PL advertiser {advertiser_id} update (fallback local write)",
+        )
+        logger.warning(
+            "[ConfigWriter] write_pl_advertiser(%s): использован fallback на локальную запись",
+            advertiser_id,
+        )
+        # Подтверждаем через Internal API, что изменение действительно применено.
+        remote = client.get_advertisers()
+        r_target = next((a for a in remote if a.get("id") == advertiser_id), None) if isinstance(remote, list) else None
+        if not isinstance(r_target, dict):
+            raise RuntimeError("Internal API не вернул обновленного рекламодателя после fallback")
+        for k, v in updates.items():
+            if r_target.get(k) != v:
+                raise RuntimeError(
+                    "Internal API не подтвердил сохранение рекламодателя. "
+                    "Вероятно, используется legacy API/другой инстанс."
+                )
+        return True
+    except Exception:
+        return False
 
 
 def write_pl_geo_data(data: Dict, username: str = "contenthub") -> None:

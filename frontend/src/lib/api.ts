@@ -187,6 +187,8 @@ export const configs = {
 
 export const advertisers = {
   list:   ()                         => api.get<any[]>('/advertisers'),
+  templates: ()                      => api.get<{ offers: string[]; cloaked: string[] }>('/advertisers/templates'),
+  create: (body: any)                => api.post<any>('/advertisers', body),
   update: (id: string, body: any)    => api.put<any>(`/advertisers/${id}`, body),
   delete: (id: string)               => api.delete<any>(`/advertisers/${id}`),
 }

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.auth import log_audit, require_operator, require_viewer
-from services.config_reader import read_pl_advertisers, read_pl_geo_data
+from services.config_reader import read_pl_advertisers, read_pl_geo_data, read_pl_templates
 from services.config_writer import (
     write_pl_advertiser,
     write_pl_advertisers,
@@ -44,6 +44,11 @@ def list_advertisers(user: Annotated[dict, Depends(require_viewer)]):
 @router.get("/geo-data")
 def get_geo_data(user: Annotated[dict, Depends(require_viewer)]):
     return read_pl_geo_data()
+
+
+@router.get("/templates")
+def get_templates(user: Annotated[dict, Depends(require_viewer)]):
+    return read_pl_templates()
 
 
 @router.get("/{advertiser_id}")
@@ -110,6 +115,17 @@ def update_advertiser(
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     ok = write_pl_advertiser(advertiser_id, updates, username=user["username"])
     if not ok:
+        # Различаем "не найден" и "есть, но не удалось синхронно сохранить".
+        exists = any(a.get("id") == advertiser_id for a in read_pl_advertisers())
+        if exists:
+            raise HTTPException(
+                500,
+                detail=(
+                    f"Не удалось сохранить рекламодателя '{advertiser_id}': "
+                    "источник данных PreLend не подтвердил изменение. "
+                    "Проверьте Internal API / туннель."
+                ),
+            )
         raise HTTPException(404, detail=f"Рекламодатель '{advertiser_id}' не найден")
     log_audit(user, "advertiser_update", "PreLend", {"id": advertiser_id, "fields": list(updates.keys())})
     return {"success": True, "id": advertiser_id, "updated": list(updates.keys())}
