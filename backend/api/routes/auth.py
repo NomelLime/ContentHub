@@ -11,7 +11,6 @@ api/routes/auth.py — Аутентификация ContentHub.
 
 from __future__ import annotations
 
-import collections
 import hashlib
 import time as _time
 from datetime import datetime, timedelta, timezone
@@ -71,19 +70,22 @@ class SuccessResponse(BaseModel):
     message: str = ""
 
 
-# ── Rate limiting ─────────────────────────────────────────────────────────────
+# ── Rate limiting (SQLite login_failures) ───────────────────────────────────────
 
-_login_failures: dict[str, list[float]] = collections.defaultdict(list)
 _MAX_LOGIN_ATTEMPTS = 5
 _LOGIN_WINDOW_SEC   = 60
 
 
 def _check_login_rate(username: str) -> None:
     now = _time.time()
-    _login_failures[username] = [
-        t for t in _login_failures[username] if now - t < _LOGIN_WINDOW_SEC
-    ]
-    if len(_login_failures[username]) >= _MAX_LOGIN_ATTEMPTS:
+    since = now - _LOGIN_WINDOW_SEC
+    with get_db() as db:
+        n = db.execute(
+            """SELECT COUNT(*) FROM login_failures
+               WHERE username = ? AND failed_at >= ?""",
+            (username, since),
+        ).fetchone()[0]
+    if int(n) >= _MAX_LOGIN_ATTEMPTS:
         raise HTTPException(
             status_code=429,
             detail=(
@@ -94,11 +96,18 @@ def _check_login_rate(username: str) -> None:
 
 
 def _record_login_failure(username: str) -> None:
-    _login_failures[username].append(_time.time())
+    with get_db() as db:
+        db.execute(
+            "INSERT INTO login_failures (username, failed_at) VALUES (?, ?)",
+            (username, _time.time()),
+        )
+        db.commit()
 
 
 def _clear_login_failures(username: str) -> None:
-    _login_failures.pop(username, None)
+    with get_db() as db:
+        db.execute("DELETE FROM login_failures WHERE username = ?", (username,))
+        db.commit()
 
 
 # ── Эндпоинты ─────────────────────────────────────────────────────────────────
@@ -267,6 +276,8 @@ def create_user(
     allowed_roles = {"viewer", "operator", "admin"}
     if body.role not in allowed_roles:
         raise HTTPException(400, detail=f"Недопустимая роль: {body.role}")
+    if body.role == "admin" and user["role"] != "admin":
+        raise HTTPException(403, detail="Только admin может создавать admin-аккаунты")
     if len(body.password) < 8:
         raise HTTPException(400, detail="Пароль должен быть не менее 8 символов")
 
@@ -298,6 +309,8 @@ def update_user_role(
     allowed_roles = {"viewer", "operator", "admin"}
     if body.role not in allowed_roles:
         raise HTTPException(400, detail=f"Недопустимая роль: {body.role}")
+    if body.role == "admin" and user["role"] != "admin":
+        raise HTTPException(403, detail="Только admin может назначать роль admin")
 
     with get_db() as db:
         target = db.execute("SELECT id, username, role FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -323,9 +336,17 @@ def change_password(
 ):
     """Смена пароля (любой авторизованный пользователь — своего)."""
     from services.auth import hash_password
+    old_pwd = body.get("old_password", "")
     new_pwd = body.get("new_password", "")
     if len(new_pwd) < 8:
         raise HTTPException(400, detail="Пароль должен быть не менее 8 символов")
+    with get_db() as db:
+        row = db.execute(
+            "SELECT password_hash FROM users WHERE id=?",
+            (user["id"],),
+        ).fetchone()
+    if not row or not verify_password(old_pwd, row["password_hash"]):
+        raise HTTPException(400, detail="Текущий пароль неверен")
     with get_db() as db:
         db.execute(
             "UPDATE users SET password_hash=? WHERE id=?",

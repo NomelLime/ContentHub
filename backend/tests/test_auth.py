@@ -126,3 +126,45 @@ class TestLogout:
         # После logout cookie удалён → refresh fails
         refresh_resp = client.post("/api/auth/refresh")
         assert refresh_resp.status_code == 401
+
+
+class TestChangePassword:
+    def test_change_password_requires_old_password(self, client, admin_token):
+        resp = client.post(
+            "/api/auth/change-password",
+            json={"new_password": "newpassword123"},
+            headers=auth_headers(admin_token),
+        )
+        assert resp.status_code == 400
+        assert "пароль" in resp.json()["detail"].lower()
+
+    def test_change_password_success(self, client, admin_token):
+        resp = client.post(
+            "/api/auth/change-password",
+            json={"old_password": "testpass123", "new_password": "newpass12345"},
+            headers=auth_headers(admin_token),
+        )
+        assert resp.status_code == 200
+        login = client.post("/api/auth/login", json={
+            "username": "testadmin",
+            "password": "newpass12345",
+        })
+        assert login.status_code == 200
+
+
+class TestOperatorRBAC:
+    def test_operator_cannot_create_admin(self, client, operator_token):
+        resp = client.post(
+            "/api/auth/users",
+            json={"username": "evil", "password": "password12", "role": "admin"},
+            headers=auth_headers(operator_token),
+        )
+        assert resp.status_code == 403
+
+    def test_admin_can_create_admin(self, client, admin_token):
+        resp = client.post(
+            "/api/auth/users",
+            json={"username": "subadmin", "password": "password12", "role": "admin"},
+            headers=auth_headers(admin_token),
+        )
+        assert resp.status_code == 200

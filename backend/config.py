@@ -94,11 +94,20 @@ HOST            = os.getenv("CONTENTHUB_HOST", "0.0.0.0")
 PORT            = int(os.getenv("CONTENTHUB_PORT", "8000"))
 # CORS: в продакшне задать через ALLOWED_ORIGINS=https://yourdomain.com
 # В dev по умолчанию — только локальный фронт Vite
-ALLOWED_ORIGINS = [
-    o.strip()
-    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
-    if o.strip()
-] or ["http://localhost:5173"]
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()] or ["http://localhost:5173"]
+# При HTTPS-cookie (прод) не оставляем localhost в списке по умолчанию
+if os.getenv("COOKIE_SECURE", "false").lower() == "true":
+    _localhostish = ("localhost", "127.0.0.1", "::1")
+    ALLOWED_ORIGINS = [
+        o for o in ALLOWED_ORIGINS
+        if not any(x in o for x in _localhostish)
+    ]
+    if not ALLOWED_ORIGINS:
+        raise EnvironmentError(
+            "COOKIE_SECURE=true: задайте ALLOWED_ORIGINS без localhost "
+            "(например ALLOWED_ORIGINS=https://yourdomain.com)"
+        )
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Интервал обновления метрик (секунды)

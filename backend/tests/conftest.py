@@ -41,6 +41,10 @@ def client(tmp_path, monkeypatch):
             "INSERT OR REPLACE INTO users (username, password_hash, role) VALUES (?,?,?)",
             ("testviewer", hash_password("viewerpass"), "viewer"),
         )
+        db.execute(
+            "INSERT OR REPLACE INTO users (username, password_hash, role) VALUES (?,?,?)",
+            ("testoperator", hash_password("operatorpass"), "operator"),
+        )
         db.commit()
 
     with TestClient(app) as c:
@@ -69,19 +73,30 @@ def viewer_token(client) -> str:
     return resp.json()["access_token"]
 
 
+@pytest.fixture
+def operator_token(client) -> str:
+    """Возвращает access_token для operator."""
+    resp = client.post("/api/auth/login", json={
+        "username": "testoperator",
+        "password": "operatorpass",
+    })
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
 def auth_headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter():
-    """Сбрасывает глобальный rate limiter между тестами.
-    
-    _login_failures — глобальный defaultdict в api/routes/auth.py.
-    Без сброса тест test_login_rate_limit загрязняет состояние
-    для всех последующих тестов, которые используют того же пользователя.
-    """
-    from api.routes.auth import _login_failures
-    _login_failures.clear()
+def reset_rate_limiter(client):
+    """Очищает login_failures в SQLite между тестами (rate limit). Зависит от client — init_db уже выполнен."""
+    from db.connection import get_db as _get_db
+
+    with _get_db() as db:
+        db.execute("DELETE FROM login_failures")
+        db.commit()
     yield
-    _login_failures.clear()
+    with _get_db() as db:
+        db.execute("DELETE FROM login_failures")
+        db.commit()

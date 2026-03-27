@@ -103,7 +103,6 @@ class PLSettingsUpdate(BaseModel):
     alerts:              Optional[PLAlertsUpdate] = None
     default_offer_url:   Optional[str]            = Field(None, max_length=500)
     cloak_template:      Optional[str]            = Field(None, max_length=100)
-    postback_token:      Optional[str]            = Field(None, max_length=200)
     test_conversion_day: Optional[int]            = Field(None, ge=0, le=6)
 
 

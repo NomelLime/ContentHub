@@ -42,6 +42,19 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_user  ON sessions(user_id, expires_at);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Неудачные попытки входа (rate limit; переживает рестарт процесса)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS login_failures (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    username    TEXT NOT NULL,
+    failed_at   REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_failures_user_time
+    ON login_failures(username, failed_at);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Audit log всех действий через UI
 -- ─────────────────────────────────────────────────────────────────────────────
 
