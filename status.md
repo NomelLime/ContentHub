@@ -379,3 +379,17 @@ http://localhost:8000/health
 | **Тесты** | `pytest backend/tests/ -q` → **26 passed** (включая новые). |
 
 **Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на `config/` + `data/`; ключ `PL_INTERNAL_API_KEY` совпадает с ContentHub `backend/.env`.
+
+### Сессия 10 (27.03.2026) — Телеметрия Orchestrator на дашборде, вкладка команд оператора
+
+| Область | Изменение |
+|---------|-----------|
+| **`backend/config.py`** | **`ORC_POLICY_TRACE`** — путь к `Orchestrator/data/policy_command_trace.jsonl`. |
+| **`backend/api/routes/operator_commands.py`** (NEW) | **`GET /api/operator-commands/trace?limit=…`** (1–5000) — последние записи JSONL; авторизация `require_viewer`. |
+| **`backend/main.py`** | Подключён роутер `operator_commands`. |
+| **`frontend/src/pages/DashboardPage.tsx`** | Блок Orchestrator: отображение **`cycle_outcome`**, JSON **`cycle_summary`**, строка **`node_outcomes`** (если есть в `orchestrator_telemetry.json`). |
+| **`frontend/src/pages/OperatorCommandsPage.tsx`** (NEW) | Вкладка **«Команды ОР»**: список событий из трейса команд (лимит 200–5000, обновление). |
+| **`frontend/src/App.tsx`** | Маршрут `/operator-commands`, пункт навигации. |
+| **`frontend/src/lib/api.ts`** | **`operatorCommands.trace(limit)`**. |
+
+Данные для дашборда по-прежнему приходят из `metrics_collector` → кэш `metrics_cache` (поля телеметрии расширены на стороне Orchestrator).
