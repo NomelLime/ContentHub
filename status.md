@@ -364,3 +364,18 @@ http://localhost:8000/health
 | `frontend/src/pages/AnalyticsPage.tsx` | Подключён `PlGeoTable` над блоком воронки. |
 
 **Зависимость:** на VPS после обновления PreLend с `geo_breakdown` — **`systemctl restart prelend-internal-api`**, иначе ответ `/metrics` без нового поля.
+
+### Сессия 9 (27.03.2026) — PreLend рекламодатели в UI, шаблоны, совместимость с Internal API
+
+| Область | Изменение |
+|---------|-----------|
+| `frontend/src/lib/api.ts` | Исправлены пути: рекламодатели → `GET/POST/PUT/DELETE /api/advertisers` (раньше несуществующий `/configs/PreLend/advertisers`). Добавлены `advertisers.create`, `advertisers.templates`. |
+| `frontend/src/components/AdvertiserManager/AdvertiserManager.tsx` | Форма **нового** рекламодателя (поля как в API); **редактирование** существующего с полным набором полей; выпадающие списки шаблонов; блок **Шаблон клоаки** (`cloak_template`) + сохранение; генератор **HMAC secret**. |
+| `backend/api/routes/advertisers.py` | `GET /api/advertisers/templates`; при ошибке сохранения различаются 404 «не найден» и 500 «Internal API не подтвердил». |
+| `backend/services/config_reader.py` | `read_pl_templates()` + **fallback**: если Internal API не отдаёт `/templates`, список шаблонов читается с диска `PreLend/templates/{offers,cloaked}`. |
+| `backend/services/config_writer.py` | Fallback локальная запись `PL_SETTINGS` / `PL_ADVERTISERS` при сбое PUT; проверка согласованности с Internal API; правки `write_pl_advertiser`. |
+| `backend/tests/test_advertiser_buttons.py` (NEW) | Smoke-тесты кнопок/эквивалентов API (`templates`, `cloak`, CRUD). |
+| **Сборка** | После изменений фронта: `npm run build` (обновление `dist` для `vite preview`). |
+| **Тесты** | `pytest backend/tests/ -q` → **26 passed** (включая новые). |
+
+**Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на `config/` + `data/`; ключ `PL_INTERNAL_API_KEY` совпадает с ContentHub `backend/.env`.
