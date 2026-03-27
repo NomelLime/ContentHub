@@ -9,6 +9,7 @@ const Dashboard     = lazy(() => import('./pages/DashboardPage'))
 const PatchesPage   = lazy(() => import('./pages/PatchesPage'))
 const ConfigPage    = lazy(() => import('./pages/ConfigPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const OperatorCommandsPage = lazy(() => import('./pages/OperatorCommandsPage'))
 const UsersPage     = lazy(() => import('./pages/UsersPage'))
 const LoginPage     = lazy(() => import('./pages/LoginPage'))
 
@@ -54,6 +55,7 @@ const NAV = [
   { to: '/patches',   label: 'Патчи' },
   { to: '/config',    label: 'Конфиги' },
   { to: '/analytics', label: 'Аналитика' },
+  { to: '/operator-commands', label: 'Команды ОР' },
 ]
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -140,6 +142,7 @@ export default function App() {
                 <Route path="/patches"   element={<PatchesPage />} />
                 <Route path="/config"    element={<ConfigPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/operator-commands" element={<OperatorCommandsPage />} />
                 <Route path="/users"     element={<UsersPage />} />
               </Routes>
             </Layout>

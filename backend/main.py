@@ -59,6 +59,7 @@ from api.routes import (
     analytics,
     auth,
     ws_route,
+    operator_commands,
 )
 
 logging.basicConfig(
@@ -192,6 +193,7 @@ app.include_router(patches.router)
 app.include_router(configs.router)
 app.include_router(advertisers.router)
 app.include_router(analytics.router)
+app.include_router(operator_commands.router)
 app.include_router(ws_route.router)
 
 

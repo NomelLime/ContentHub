@@ -68,17 +68,40 @@ def get_sp_agents_status() -> List[Dict]:
     Возвращает статусы агентов ShortsProject из agent_memory.json.
     """
     memory = _read_memory(cfg.SP_AGENT_MEMORY)
-    statuses = memory.get("agent_statuses", {})
+    statuses = memory.get("agent_statuses") or {}
+    agents_flat = memory.get("agents") or {}
+    kv = memory.get("kv") or {}
+    if not isinstance(kv, dict):
+        kv = {}
+    human_map = kv.get("agent_human_detail") or {}
+    if not isinstance(human_map, dict):
+        human_map = {}
 
     result = []
     for agent in SP_AGENTS:
-        info = statuses.get(agent, {})
+        info = statuses.get(agent, {}) if isinstance(statuses, dict) else {}
+        if isinstance(info, dict) and info.get("status"):
+            status = info.get("status", "UNKNOWN")
+            updated_at = info.get("updated_at")
+            err = info.get("last_error")
+        else:
+            raw = agents_flat.get(agent) if isinstance(agents_flat, dict) else None
+            if isinstance(raw, str):
+                status = raw
+                updated_at = memory.get("saved_at")
+                err = None
+            else:
+                status = "UNKNOWN"
+                updated_at = None
+                err = None
+        detail = human_map.get(agent) or human_map.get(agent.upper())
         result.append({
             "name":       agent,
             "project":    "ShortsProject",
-            "status":     info.get("status", "UNKNOWN"),
-            "updated_at": info.get("updated_at"),
-            "error":      info.get("last_error"),
+            "status":     status,
+            "updated_at": updated_at,
+            "error":      err,
+            "detail":     detail if detail else None,
         })
     return result
 
@@ -91,7 +114,7 @@ def get_pl_agents_status() -> List[Dict]:
         # API недоступен — возвращаем агентов со статусом UNKNOWN
         return [
             {"name": agent, "project": "PreLend", "status": "UNKNOWN",
-             "updated_at": None, "error": "PreLend API недоступен"}
+             "updated_at": None, "error": "PreLend API недоступен", "detail": None}
             for agent in PL_AGENTS
         ]
     return client.get_agents()

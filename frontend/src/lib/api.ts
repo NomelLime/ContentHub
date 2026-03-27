@@ -193,6 +193,10 @@ export const advertisers = {
   delete: (id: string)               => api.delete<any>(`/advertisers/${id}`),
 }
 
+export const operatorCommands = {
+  trace: (limit = 500) => api.get<any>(`/operator-commands/trace?limit=${limit}`),
+}
+
 export const analytics = {
   funnel:      (days = 7)        => api.get<any>(`/analytics/funnel?days=${days}`),
   get:         (params?: string) => api.get<any>(`/analytics${params ? '?' + params : ''}`),

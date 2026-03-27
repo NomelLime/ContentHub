@@ -62,6 +62,8 @@ PL_AGENT_MEMORY     = PRELEND_DIR / "data" / "agent_memory.json"
 # ──────────────────────────────────────────────────────────────────────────────
 ORC_DB              = ORCHESTRATOR_DIR / "data" / "orchestrator.db"   # БД в data/, не в корне
 ORC_AGENT_MEMORY    = ORCHESTRATOR_DIR / "data" / "agent_memory.json"
+ORC_TELEMETRY       = ORCHESTRATOR_DIR / "data" / "orchestrator_telemetry.json"
+ORC_POLICY_TRACE    = ORCHESTRATOR_DIR / "data" / "policy_command_trace.jsonl"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Безопасность / JWT

@@ -21,6 +21,8 @@ interface Agent {
   status:     string
   updated_at: string | null
   error:      string | null
+  /** Человекочитаемое «что делает агент сейчас» (из agent_memory kv) */
+  detail?:    string | null
 }
 
 interface Props {
@@ -98,6 +100,11 @@ export default function AgentPanel({ data, canControl }: Props) {
                 </button>
               </div>
               <div className="text-xs text-gray-500 mb-3">{ag.status}</div>
+              {ag.detail && (
+                <div className="text-xs text-gray-400 mb-2 leading-snug line-clamp-3" title={ag.detail}>
+                  {ag.detail}
+                </div>
+              )}
               {isHelpOpen && (
                 <div className="text-xs text-gray-300 bg-gray-900/60 border border-gray-700 rounded p-2 mb-3 leading-relaxed">
                   {getAgentDescription(ag.name)}

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -130,11 +131,27 @@ def _collect_pl_summary(period_hours: int = 24) -> Dict:
     }
 
 
+def _read_orc_telemetry() -> Optional[Dict[str, Any]]:
+    """Снимок LangGraph-цикла: trace_id, текущий узел, подпись шага."""
+    path = cfg.ORC_TELEMETRY
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.debug("[MetricsCollector] ORC telemetry read: %s", exc)
+        return None
+
+
 def _collect_orc_summary() -> Dict:
     """Читает orchestrator.db — зоны, последний план, патчи."""
+    telemetry = _read_orc_telemetry()
     db_path = cfg.ORC_DB
     if not db_path.exists():
-        return {"available": False}
+        out: Dict[str, Any] = {"available": False}
+        if telemetry:
+            out["cycle_telemetry"] = telemetry
+        return out
 
     try:
         with sqlite3.connect(str(db_path)) as conn:
@@ -157,10 +174,14 @@ def _collect_orc_summary() -> Dict:
                 "zones":          zones,
                 "pending_patches": pending_patches,
                 "last_plan": dict(last_plan) if last_plan else None,
+                "cycle_telemetry": telemetry,
             }
     except Exception as exc:
         logger.warning("[MetricsCollector] ORC DB read error: %s", exc)
-        return {"available": False}
+        out = {"available": False}
+        if telemetry:
+            out["cycle_telemetry"] = telemetry
+        return out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
