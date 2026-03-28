@@ -15,6 +15,14 @@ const STATUS_COLOR: Record<string, string> = {
   UNKNOWN: 'bg-gray-700',
 }
 
+/** ShortsProject кладёт в JSON строки вида «RUNNING: постобработка …» — для индикатора и кнопок берём первый токен. */
+function primaryAgentStatus(raw: string | undefined | null): string {
+  if (!raw || typeof raw !== 'string') return 'UNKNOWN'
+  const head = raw.split(':')[0].trim().toUpperCase()
+  if (['RUNNING', 'IDLE', 'WAITING', 'ERROR', 'STOPPED', 'UNKNOWN'].includes(head)) return head
+  return 'UNKNOWN'
+}
+
 interface Agent {
   name:       string
   project:    string
@@ -82,12 +90,16 @@ export default function AgentPanel({ data, canControl }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {agentList.map((ag) => {
           const key = `${ag.project}/${ag.name}`
-          const isRunning = ag.status === 'RUNNING'
+          const statusKey = primaryAgentStatus(ag.status)
+          const isRunning = statusKey === 'RUNNING'
           const isHelpOpen = helpOpen === key
           return (
             <div key={key} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
               <div className="flex items-center gap-2 mb-2">
-                <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', STATUS_COLOR[ag.status] || 'bg-gray-600')} />
+                <span
+                  className={clsx('w-2 h-2 rounded-full flex-shrink-0', STATUS_COLOR[statusKey] || 'bg-gray-600')}
+                  title={ag.status !== statusKey ? `Сырые данные: ${ag.status}` : undefined}
+                />
                 <span className="text-sm font-medium truncate">{ag.name}</span>
                 <button
                   type="button"
