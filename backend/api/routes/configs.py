@@ -14,11 +14,10 @@ GET  /api/configs/Orchestrator/zones     → зоны доверия
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from typing import Annotated, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-
-logger = logging.getLogger(__name__)
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.auth import log_audit, require_operator, require_viewer
@@ -28,7 +27,16 @@ from services.config_reader import (
     read_pl_settings,
     read_sp_env,
 )
-from services.config_writer import write_pl_settings, write_sp_env
+from services.config_writer import (
+    git_config_log,
+    git_config_revert_to_commit,
+    git_config_show,
+    list_config_history_targets,
+    write_pl_settings,
+    write_sp_env,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/configs", tags=["configs"])
 
@@ -150,3 +158,82 @@ def update_pl_settings(
 @router.get("/Orchestrator/zones")
 def get_orc_zones(user: Annotated[dict, Depends(require_viewer)]):
     return read_orc_zones()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# История конфигов (git)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class ConfigHistoryTarget(str, Enum):
+    sp_env = "sp_env"
+    pl_settings = "pl_settings"
+    pl_advertisers = "pl_advertisers"
+
+
+@router.get("/history/targets")
+def config_history_targets(user: Annotated[dict, Depends(require_viewer)]):
+    """Список ключей файлов, для которых доступны log/show/revert."""
+    return {"targets": list_config_history_targets()}
+
+
+@router.get("/history")
+def config_history_log(
+    target: ConfigHistoryTarget = Query(..., description="sp_env | pl_settings | pl_advertisers"),
+    limit: int = Query(40, ge=1, le=200),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    """Коммиты, менявшие выбранный конфиг."""
+    try:
+        entries = git_config_log(target.value, limit=limit)
+    except KeyError:
+        raise HTTPException(400, detail="Неизвестный target") from None
+    return {"target": target.value, "commits": entries}
+
+
+@router.get("/history/show")
+def config_history_show(
+    target: ConfigHistoryTarget = Query(...),
+    commit: str = Query(..., min_length=7, max_length=64),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    """Текст файла на выбранном коммите (git show)."""
+    try:
+        content = git_config_show(target.value, commit)
+    except KeyError:
+        raise HTTPException(400, detail="Неизвестный target") from None
+    except RuntimeError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    return {"target": target.value, "commit": commit, "content": content}
+
+
+class ConfigHistoryRevertBody(BaseModel):
+    target: ConfigHistoryTarget
+    commit: str = Field(..., min_length=7, max_length=64)
+
+
+@router.post("/history/revert")
+def config_history_revert(
+    body: ConfigHistoryRevertBody,
+    user: Annotated[dict, Depends(require_operator)],
+):
+    """
+    Восстанавливает файл из коммита (git checkout + commit).
+    operator/admin. Для PreLend дополнительно вызывается Internal API при успехе.
+    """
+    try:
+        git_config_revert_to_commit(body.target.value, body.commit, username=user["username"])
+    except KeyError:
+        raise HTTPException(400, detail="Неизвестный target") from None
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(502, detail=str(exc)) from exc
+
+    log_audit(
+        user,
+        "config_revert",
+        "ShortsProject" if body.target == ConfigHistoryTarget.sp_env else "PreLend",
+        {"target": body.target.value, "commit": body.commit[:12]},
+    )
+    return {"success": True, "target": body.target.value, "commit": body.commit}

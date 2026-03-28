@@ -10,12 +10,15 @@
 # ───────────────────────────────────────────────────────────────────────────────
 
 # ── Секреты и окружение ────────────────────────────────────────────────────────
+# Backend: сначала GitHub/.secrets.env (монорепа), затем backend/.env — см. backend/main.py
 .env
 .env.*
 backend/.env
 backend/.env.*
 !.env.example
 !backend/.env.example
+# Доп. локальные секреты; общий GitHub/.secrets.env — в .gitignore корня монорепы
+secrets.local.env
 *.pem
 *.key
 
@@ -144,7 +147,4 @@ $RECYCLE.BIN/
 *~
 *.orig
 *.bak
-/backend/api/routes/__pycache__
-backend/.env
-backend/api/routes/__pycache__/auth.cpython-312.pyc
 run-all.local.cmd

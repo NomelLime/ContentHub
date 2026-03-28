@@ -160,6 +160,10 @@ export const dashboard = {
   get: () => api.get<any>('/dashboard'),
 }
 
+export const system = {
+  health: () => api.get<any>('/system/health'),
+}
+
 export const agents = {
   list:  ()                              => api.get<any>('/agents'),
   start: (project: string, name: string) => api.post<any>(`/agents/${project}/${name}/start`),
@@ -183,6 +187,15 @@ export const configs = {
   putPLSettings:     (body: any)    => api.put<any>('/configs/PreLend/settings', body),
   getAdvertisers:    ()             => api.get<any[]>('/advertisers'),
   putAdvertiser:     (id: string, body: any) => api.put<any>(`/advertisers/${id}`, body),
+  historyTargets:    ()             => api.get<{ targets: string[] }>('/configs/history/targets'),
+  historyLog:        (target: string, limit = 40) =>
+    api.get<any>(`/configs/history?target=${encodeURIComponent(target)}&limit=${limit}`),
+  historyShow:       (target: string, commit: string) =>
+    api.get<any>(
+      `/configs/history/show?target=${encodeURIComponent(target)}&commit=${encodeURIComponent(commit)}`,
+    ),
+  historyRevert:     (target: string, commit: string) =>
+    api.post<any>('/configs/history/revert', { target, commit }),
 }
 
 export const advertisers = {
@@ -191,6 +204,8 @@ export const advertisers = {
   create: (body: any)                => api.post<any>('/advertisers', body),
   update: (id: string, body: any)    => api.put<any>(`/advertisers/${id}`, body),
   delete: (id: string)               => api.delete<any>(`/advertisers/${id}`),
+  compare: (periodHours = 24)        =>
+    api.get<any>(`/advertisers/compare?period_hours=${periodHours}`),
 }
 
 export const operatorCommands = {
@@ -203,4 +218,8 @@ export const analytics = {
   planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
   /** PreLend: сводка и geo_breakdown; period_hours 1–168 */
   pl:          (periodHours = 24) => api.get<any>(`/analytics/pl?period_hours=${periodHours}`),
+  audit:       (limit = 100, project?: string) =>
+    api.get<any[]>(
+      `/analytics/audit?limit=${limit}${project ? `&project=${encodeURIComponent(project)}` : ''}`,
+    ),
 }

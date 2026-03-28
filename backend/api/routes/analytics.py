@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from db.connection import get_db
-from services.auth import log_audit, require_operator, require_viewer
+from services.auth import log_audit, require_admin, require_operator, require_viewer
 from services.config_reader import read_pl_splits
 from services.config_writer import write_pl_splits
 from services.metrics_collector import (
@@ -179,9 +179,9 @@ def get_pl_analytics(
 def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
     project: str = Query(None),
-    user: Annotated[dict, Depends(require_viewer)] = None,
+    user: Annotated[dict, Depends(require_admin)] = None,
 ):
-    """Возвращает последние действия из audit_log."""
+    """Возвращает последние действия из audit_log (только admin)."""
     with get_db() as db:
         if project:
             rows = db.execute(

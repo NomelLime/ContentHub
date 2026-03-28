@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -37,9 +38,12 @@ sys.path = [p for p in sys.path if not p.endswith("Orchestrator") and "Orchestra
 # ⚠️ КРИТИЧНО: load_dotenv() в САМОМ НАЧАЛЕ ДО импорта config и других модулей!
 from dotenv import load_dotenv
 
-# Явно указываем путь к .env — ищем в директории где лежит этот файл (backend/)
+# Сначала общий файл секретов в корне монорепы (GitHub/.secrets.env), затем backend/.env (переопределения).
+_github_root = _backend_dir.parent.parent
+_shared_env = _github_root / ".secrets.env"
+load_dotenv(dotenv_path=_shared_env, override=False)
 _env_file = _backend_dir / ".env"
-load_dotenv(dotenv_path=_env_file)
+load_dotenv(dotenv_path=_env_file, override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -60,12 +64,34 @@ from api.routes import (
     auth,
     ws_route,
     operator_commands,
+    system,
+    events,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+if os.getenv("LOG_FORMAT", "").strip().lower() == "json":
+    try:
+        from pythonjsonlogger import jsonlogger
+
+        _root = logging.getLogger()
+        _root.handlers.clear()
+        _root.setLevel(logging.INFO)
+        _fmt = jsonlogger.JsonFormatter(
+            "%(asctime)s %(name)s %(levelname)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        )
+        _h = logging.StreamHandler()
+        _h.setFormatter(_fmt)
+        _root.addHandler(_h)
+    except Exception:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+else:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
 logger = logging.getLogger(__name__)
 
 
@@ -194,6 +220,8 @@ app.include_router(configs.router)
 app.include_router(advertisers.router)
 app.include_router(analytics.router)
 app.include_router(operator_commands.router)
+app.include_router(system.router)
+app.include_router(events.router)
 app.include_router(ws_route.router)
 
 

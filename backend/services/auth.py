@@ -10,14 +10,15 @@ Roles:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 import config as cfg
@@ -105,6 +106,31 @@ def require_viewer(user: dict = Depends(_get_current_user)) -> dict:
 
 
 def require_operator(user: dict = Depends(_get_current_user)) -> dict:
+    if user["role"] not in ("operator", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Требуется роль operator или admin")
+    return user
+
+
+def require_operator_or_internal(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    x_internal_events_key: Annotated[Optional[str], Header(alias="X-Internal-Events-Key")] = None,
+) -> dict:
+    """Operator/admin JWT или валидный X-Internal-Events-Key (если задан в конфиге)."""
+    internal = getattr(cfg, "INTERNAL_EVENTS_KEY", "") or ""
+    if internal and x_internal_events_key:
+        a, b = internal.encode("utf-8"), x_internal_events_key.encode("utf-8")
+        if len(a) == len(b) and hmac.compare_digest(a, b):
+            return {"id": 0, "username": "internal", "role": "operator"}
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
+    payload = decode_access_token(credentials.credentials)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Токен недействителен или истёк")
+    user = {
+        "id": int(payload["sub"]),
+        "username": payload["username"],
+        "role": payload["role"],
+    }
     if user["role"] not in ("operator", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Требуется роль operator или admin")
     return user

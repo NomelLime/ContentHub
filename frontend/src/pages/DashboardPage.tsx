@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 // [FIX#3] getUserRole() вместо localStorage.getItem('role')
 import { dashboard as dashApi, agents as agentsApi, getUserRole } from '../lib/api'
 import MetricCard from '../components/Dashboard/MetricCard'
+import SystemHealth from '../components/Dashboard/SystemHealth'
 import AgentPanel from '../components/AgentPanel/AgentPanel'
 import AlertFeed from '../components/AlertFeed/AlertFeed'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -43,6 +44,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <SystemHealth />
       <div>
         <h1 className="text-2xl font-bold">Дашборд</h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -51,7 +53,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Метрики */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard title="Просмотры (всего)"   value={sp.total_views?.toLocaleString() || '—'}  color="blue"   loading={loading} />
         <MetricCard title="Видео за 24ч"        value={sp.videos_24h  || '—'}                    color="green"  loading={loading} />
         <MetricCard title="Клики PreLend (24ч)" value={pl.clicks_24h?.toLocaleString() || '—'}  color="purple" loading={loading} />

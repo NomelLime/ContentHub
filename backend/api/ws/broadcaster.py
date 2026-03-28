@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 _prev_agents:  Dict[str, Any] = {}
 _prev_metrics: Dict[str, Any] = {}
 _prev_alerts_id: int = 0
+_last_system_event_id: int = 0
 
 
 async def broadcast_loop() -> None:
@@ -51,7 +53,7 @@ async def broadcast_loop() -> None:
 
 
 async def _tick() -> None:
-    global _prev_agents, _prev_metrics, _prev_alerts_id
+    global _prev_agents, _prev_metrics, _prev_alerts_id, _last_system_event_id
     loop = asyncio.get_event_loop()
 
     # ── Агенты ────────────────────────────────────────────────────────────────
@@ -77,6 +79,15 @@ async def _tick() -> None:
         _prev_alerts_id = last_id
         for alert in new_alerts:
             await manager.broadcast("alerts", alert)
+
+    # ── System events (ContentHub DB) ─────────────────────────────────────────
+    sevents, new_eid = await loop.run_in_executor(None, _get_new_system_events, _last_system_event_id)
+    if sevents:
+        _last_system_event_id = new_eid
+        for ev in sevents:
+            await manager.broadcast("system_event", ev)
+
+    await loop.run_in_executor(None, _cleanup_system_events)
 
 
 def _get_agents() -> dict:
@@ -118,3 +129,42 @@ def _get_new_alerts(last_id: int) -> tuple[list, int]:
             return alerts, new_last_id
     except Exception:
         return [], last_id
+
+
+def _get_new_system_events(last_id: int) -> tuple[list, int]:
+    from db.connection import get_db
+
+    try:
+        with get_db() as db:
+            rows = db.execute(
+                """
+                SELECT id, source, event_type, payload, created_at
+                FROM system_events WHERE id > ? ORDER BY id
+                """,
+                (last_id,),
+            ).fetchall()
+            if not rows:
+                return [], last_id
+            out = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["payload"] = json.loads(d.get("payload") or "{}")
+                except json.JSONDecodeError:
+                    d["payload"] = {}
+                out.append(d)
+            return out, rows[-1]["id"]
+    except Exception:
+        return [], last_id
+
+
+def _cleanup_system_events() -> None:
+    from db.connection import get_db
+
+    cutoff = time.time() - 3600
+    try:
+        with get_db() as db:
+            db.execute("DELETE FROM system_events WHERE created_at < ?", (cutoff,))
+            db.commit()
+    except Exception:
+        pass

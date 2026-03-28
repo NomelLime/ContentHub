@@ -19,7 +19,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import config as cfg
 
@@ -319,6 +319,135 @@ def write_pl_splits(data: List[Dict], username: str = "contenthub") -> None:
     ok = get_client().write_splits(data, source=f"contenthub:{username}")
     if not ok:
         raise RuntimeError("Не удалось записать PL splits через Internal API")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# История конфигов (git log / show / revert по отслеживаемым файлам)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Ключ → (корень git-репозитория, путь к файлу относительно корня)
+_CONFIG_TRACKED: Dict[str, Tuple[Path, str]] = {
+    "sp_env":         (cfg.SHORTS_PROJECT_DIR, ".env"),
+    "pl_settings":    (cfg.PRELEND_DIR, "config/settings.json"),
+    "pl_advertisers": (cfg.PRELEND_DIR, "config/advertisers.json"),
+}
+
+
+def list_config_history_targets() -> List[str]:
+    return list(_CONFIG_TRACKED.keys())
+
+
+def _resolve_tracked(target_key: str) -> Tuple[Path, Path]:
+    if target_key not in _CONFIG_TRACKED:
+        raise KeyError(target_key)
+    repo, rel = _CONFIG_TRACKED[target_key]
+    abspath = (repo / rel).resolve()
+    return repo.resolve(), abspath
+
+
+def _git_rel_path(repo: Path, abspath: Path) -> str:
+    return str(abspath.resolve().relative_to(repo.resolve()))
+
+
+def git_config_log(target_key: str, limit: int = 40) -> List[Dict[str, Any]]:
+    """Список коммитов, затрагивавших файл (новые сверху)."""
+    repo, abspath = _resolve_tracked(target_key)
+    if not (repo / ".git").is_dir():
+        return []
+    rel = _git_rel_path(repo, abspath)
+    cp = subprocess.run(
+        [
+            "git", "log", "-n", str(limit), "--format=%H%x1f%ct%x1f%s", "--", rel,
+        ],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+    )
+    if cp.returncode != 0:
+        logger.warning("[ConfigWriter] git log: %s", (cp.stderr or "")[:400])
+        return []
+    rows: List[Dict[str, Any]] = []
+    for line in cp.stdout.strip().splitlines():
+        parts = line.split("\x1f", 2)
+        if len(parts) != 3:
+            continue
+        rows.append(
+            {
+                "commit":       parts[0],
+                "committed_ts": int(parts[1]),
+                "subject":      parts[2],
+            }
+        )
+    return rows
+
+
+def git_config_show(target_key: str, commit: str, max_bytes: int = 400_000) -> str:
+    """Содержимое файла на указанном коммите (`git show commit:path`)."""
+    repo, abspath = _resolve_tracked(target_key)
+    rel = _git_rel_path(repo, abspath)
+    spec = f"{commit.strip()}:{rel}"
+    cp = subprocess.run(
+        ["git", "show", spec],
+        cwd=str(repo),
+        capture_output=True,
+    )
+    if cp.returncode != 0:
+        err = (cp.stderr or b"").decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"git show не удался: {err}")
+    data = cp.stdout
+    if len(data) > max_bytes:
+        return data[:max_bytes].decode("utf-8", errors="replace") + "\n\n… [обрезано]"
+    return data.decode("utf-8", errors="replace")
+
+
+def git_config_revert_to_commit(target_key: str, commit: str, username: str) -> None:
+    """
+    Восстанавливает файл из коммита в рабочее дерево и делает git commit.
+    Для pl_* после этого может понадобиться синхронизация с Internal API вручную,
+    если запись шла только на VPS.
+    """
+    repo, abspath = _resolve_tracked(target_key)
+    rel = _git_rel_path(repo, abspath)
+    c = commit.strip()
+    if len(c) < 7:
+        raise ValueError("Некорректный hash коммита")
+
+    cp = subprocess.run(
+        ["git", "checkout", c, "--", rel],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+    )
+    if cp.returncode != 0:
+        raise RuntimeError((cp.stderr or cp.stdout or "git checkout failed")[:500])
+
+    _git_commit(
+        repo_dir=repo,
+        file_path=abspath,
+        message=f"[ContentHub:{username}] revert {target_key} to {c[:7]}",
+    )
+
+    # Для SP .env достаточно файла. Для PL JSON — пробуем отправить на API как при обычной записи.
+    if target_key == "pl_settings":
+        import json as _json
+        from integrations.prelend_client import get_client
+
+        payload = _json.loads(abspath.read_text(encoding="utf-8"))
+        if not get_client().write_settings(payload, source=f"contenthub:{username}:revert"):
+            logger.warning(
+                "[ConfigWriter] revert pl_settings: локальный git ok, Internal API write не подтверждён"
+            )
+    elif target_key == "pl_advertisers":
+        import json as _json
+        from integrations.prelend_client import get_client
+
+        payload = _json.loads(abspath.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            raise RuntimeError("advertisers.json должен быть массивом")
+        if not get_client().write_advertisers(payload, source=f"contenthub:{username}:revert"):
+            logger.warning(
+                "[ConfigWriter] revert pl_advertisers: локальный git ok, Internal API write не подтверждён"
+            )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -96,3 +96,16 @@ CREATE TABLE IF NOT EXISTS video_funnel_links (
 
 CREATE INDEX IF NOT EXISTS idx_funnel_links_stem ON video_funnel_links(sp_stem);
 CREATE INDEX IF NOT EXISTS idx_funnel_links_sub  ON video_funnel_links(prelend_sub_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- События (Event Bus — PreLend / Orchestrator → WS)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS system_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source      TEXT NOT NULL,
+    event_type  TEXT NOT NULL,
+    payload     TEXT NOT NULL DEFAULT '{}',
+    created_at  REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_created ON system_events(created_at);

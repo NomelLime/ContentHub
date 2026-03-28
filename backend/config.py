@@ -87,6 +87,9 @@ else:
 ACCESS_TOKEN_EXPIRE_MINUTES  = int(os.getenv("ACCESS_TOKEN_EXPIRE_MIN",  "60"))
 REFRESH_TOKEN_EXPIRE_DAYS    = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
+# Сервисные POST (например /api/events) с заголовком X-Internal-Events-Key
+INTERNAL_EVENTS_KEY = os.getenv("CONTENTHUB_INTERNAL_EVENTS_KEY", "").strip()
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Веб-сервер / CORS
 # ──────────────────────────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ import logging
 import uuid
 from typing import Annotated, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from services.auth import log_audit, require_operator, require_viewer
@@ -52,6 +52,57 @@ def get_geo_data(user: Annotated[dict, Depends(require_viewer)]):
 @router.get("/templates")
 def get_templates(user: Annotated[dict, Depends(require_viewer)]):
     return read_pl_templates()
+
+
+@router.get("/compare")
+def compare_advertisers_metrics(
+    period_hours: int = Query(24, ge=1, le=168),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    """
+    Сводка по рекламодателям: конфиг (имя, ставка, статус) + метрики из PreLend Internal API
+    (by_advertiser: клики, конверсии, CR за period_hours).
+    """
+    from integrations.prelend_client import get_client
+
+    advertisers = read_pl_advertisers()
+    masked = [_mask_secrets(a) for a in advertisers]
+
+    client = get_client()
+    by_adv: list = []
+    api_ok = False
+    if client.is_available():
+        metrics = client.get_metrics(period_hours=period_hours) or {}
+        by_adv = metrics.get("by_advertiser") or []
+        api_ok = True
+
+    idx = {str(row.get("advertiser_id") or ""): row for row in by_adv}
+
+    rows = []
+    for a in masked:
+        aid = str(a.get("id") or "")
+        m = idx.get(aid) if aid else idx.get("—")
+        if m is None:
+            m = {"clicks": 0, "conversions": 0, "cr": 0.0}
+        rows.append(
+            {
+                "id":          aid,
+                "name":        a.get("name"),
+                "rate":        a.get("rate"),
+                "status":      a.get("status"),
+                "template":    a.get("template"),
+                "clicks":      int(m.get("clicks") or 0),
+                "conversions": int(m.get("conversions") or 0),
+                "cr":          float(m.get("cr") or 0),
+            }
+        )
+    rows.sort(key=lambda r: (-r["clicks"], r["id"]))
+
+    return {
+        "period_hours": period_hours,
+        "api_available": api_ok,
+        "rows": rows,
+    }
 
 
 @router.get("/{advertiser_id}")

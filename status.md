@@ -40,9 +40,11 @@ ContentHub/
 │   │   │   ├── dashboard.py           # GET /api/dashboard
 │   │   │   ├── agents.py              # GET /api/agents, POST /api/agents/{name}/start|stop
 │   │   │   ├── patches.py             # GET/POST /api/patches/{id}/approve|reject (409 при race)
-│   │   │   ├── configs.py             # GET/PUT /api/configs/*
-│   │   │   ├── advertisers.py         # CRUD рекламодателей PreLend
-│   │   │   ├── analytics.py           # GET /api/analytics/*, /pl?period_hours=, /plan-quality
+│   │   │   ├── configs.py             # GET/PUT /api/configs/* + /history (git log/show/revert)
+│   │   │   ├── advertisers.py         # CRUD + GET /compare (метрики по офферам)
+│   │   │   ├── analytics.py           # GET /api/analytics/*, /audit (admin), /pl, /plan-quality
+│   │   │   ├── system.py              # GET /api/system/health
+│   │   │   ├── events.py              # POST /api/events (JWT operator или X-Internal-Events-Key)
 │   │   │   └── ws_route.py            # WebSocket /ws (JWT auth через ?token=)
 │   │   └── ws/
 │   │       └── broadcaster.py         # asyncio broadcast loop с diff-логикой
@@ -50,27 +52,38 @@ ContentHub/
 │   │   ├── auth.py                    # JWT create/verify, bcrypt, RBAC depends
 │   │   ├── metrics_collector.py       # Агрегация метрик; PreLend + geo_breakdown из /metrics
 │   │   ├── config_reader.py           # Чтение конфигов (SP, PreLend, Orchestrator)
-│   │   ├── config_writer.py           # Запись конфигов + approve/reject патчей (→ 409 при race)
+│   │   ├── config_writer.py           # Запись конфигов, git history/revert, approve/reject патчей
+│   │   ├── health_checker.py          # Агрегированный health SP / PL API / ORC
 │   │   └── agent_controller.py        # Запись флагов в agent_memory.json
+│   ├── integrations/
+│   │   └── prelend_client.py          # Шим → Orchestrator/integrations/prelend_client
 │   └── tests/
 │       ├── conftest.py                # Изолированная БД, фикстуры admin/viewer
 │       ├── test_auth.py               # login, rate-limit, RBAC, logout, refresh
 │       ├── test_patches.py            # list, approve (viewer→403), nonexistent→409
-│       └── test_token_rotation.py     # Token rotation: replay protection, role в ответе
+│       ├── test_token_rotation.py     # Token rotation: replay protection, role в ответе
+│       ├── test_health_checker.py     # /api/system/health
+│       └── test_advertiser_buttons.py # advertisers API smoke
 └── frontend/
     └── src/
         ├── lib/
-        │   └── api.ts                 # HTTP клиент: accessToken (memory), role (memory), clearAuth
+        │   └── api.ts                 # + configs.history*, advertisers.compare, analytics.audit
         ├── hooks/
         │   └── useWebSocket.ts        # WS хук: getAccessToken() при каждом коннекте
+        ├── components/
+        │   ├── ConfigHistory/         # git log / просмотр / откат конфигов
+        │   ├── AdvertiserCompare/   # таблица сравнения офферов и метрик
+        │   └── Dashboard/SystemHealth.tsx
         ├── pages/
         │   ├── LoginPage.tsx          # auth.login() → setAccessToken(at, role) in-memory
-        │   ├── DashboardPage.tsx      # getUserRole() [FIX#3]
+        │   ├── DashboardPage.tsx      # getUserRole() [FIX#3], SystemHealth
         │   ├── PatchesPage.tsx        # getUserRole() + DiffViewer [FIX#3]
-        │   ├── ConfigPage.tsx         # getUserRole() [FIX#3]
+        │   ├── ConfigPage.tsx         # SP + рекламодатели + compare + история конфигов
         │   ├── AnalyticsPage.tsx      # FunnelChart + PlGeoTable (PreLend по ГЕО)
+        │   ├── AuditPage.tsx          # audit_log (admin)
+        │   ├── OperatorCommandsPage.tsx
         │   └── UsersPage.tsx          # CRUD пользователей
-        └── App.tsx                    # RequireAuth + Layout с getUserRole() [FIX#3]
+        └── App.tsx                    # RequireAuth, /audit (admin), адаптивный layout
 ```
 
 ---
@@ -97,19 +110,24 @@ RequireAuth → initAuth() → POST /api/auth/refresh
 
 | Роль | Доступ |
 |------|--------|
-| `admin` | Все функции включая управление пользователями (`/api/auth/users`) |
-| `operator` | Запись конфигов, approve/reject патчей, управление splits и агентами |
-| `viewer` | Только чтение: dashboard, аналитика, список агентов и патчей |
+| `admin` | Всё, включая пользователей (`/api/auth/users`), страницу **Аудит** (`GET /api/analytics/audit`) |
+| `operator` | Запись конфигов, approve/reject патчей, splits, агенты; `POST /api/events` (JWT или внутренний ключ) |
+| `viewer` | Только чтение: dashboard, аналитика, агенты, патчи |
 
 ---
 
-## ENV (.env.example)
+## ENV (.env.example + монорепа)
+
+**Порядок загрузки (backend/main.py):** сначала **`GitHub/.secrets.env`** (если есть), затем **`backend/.env`** (переопределения). Шаблон общего файла: **`GitHub/.secrets.env.example`**. Такой же `.secrets.env` подхватывают Orchestrator (`config.py`), ShortsProject (`pipeline/config.py`), PreLend Internal API (`internal_api/config.py`).
 
 ```env
 # JWT
 CONTENTHUB_SECRET_KEY=your-secret-key-here   # python3 -c "import secrets; print(secrets.token_hex(32))"
 ACCESS_TOKEN_EXPIRE_MIN=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
+
+# Внутренние события (POST /api/events с заголовком X-Internal-Events-Key)
+CONTENTHUB_INTERNAL_EVENTS_KEY=
 
 # Пути к проектам
 GITHUB_ROOT=/path/to/projects    # Обязательно — иначе EnvironmentError при старте
@@ -132,6 +150,9 @@ PL_INTERNAL_API_KEY=   # тот же ключ, что PL_INTERNAL_API_KEY на V
 # CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1
 # Устаревание RUNNING в панели агентов SP (минуты):
 # SP_AGENT_STATUS_STALE_MINUTES=25
+
+# JSON-логи (опционально)
+# LOG_FORMAT=json
 ```
 
 ---
@@ -427,3 +448,30 @@ http://localhost:8000/health
 - [x] Логин с `http://localhost:4173` после `npm run build` + `npm run preview`
 - [x] Сохранение **`cloak_template`** при живом туннеле и совпадающем API-ключе (или `CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1` только для локального JSON)
 - [ ] На VPS: задеплоен актуальный **`internal_api/routes/configs.py`** (whitelist), сервис перезапущен
+
+### Сессия 12 (28.03.2026) — План 10–14 (частичная реализация в репозитории)
+
+Реализовано по `development_plan_sessions_10_14.md`:
+
+| Область | Изменение |
+|---------|-----------|
+| **ContentHub** | `GET /api/system/health` + `services/health_checker.py`, виджет **`SystemHealth`**, сетка метрик `grid-cols-1 sm:lg`, таблица **`system_events`**, **`POST /api/events`**, broadcaster шлёт **`system_event`** по WS, тесты **`test_health_checker.py`**. |
+| **PreLend** | Таблицы **`shave_cache`**, **`click_fingerprints`**, **`video_links`** в **`data/init_db.sql`**; Router читает shave из кэша; **`cron/recalc_shave.py`**, **`cron/retry_postbacks.py`**; Internal API **`POST /metrics/recalc-shave`**, **`POST /register_video`**; дедуп в **`index.php`**; **`GeoAdapter`** + **`GeoDetector`/`ClickLogger`**; postback → **`postback_retry.jsonl`**; тесты **`test_click_dedup.php`**. |
+| **ShortsProject** | **`pipeline/pipeline_state.py`**, **`run_pipeline.py`** (`--only`, `--resume`, чекпоинты), **`PRELEND_*`** + вызов **`register_video`** из **`uploader.py`**, **`vl_warm`/`register_gpu_warm_callback`**, **`python-json-logger`**, **`test_pipeline_state.py`**. |
+| **Orchestrator** | Поэтапный **`sp_runner.manage_sp_pipeline`** (retry, skip), константы **`SP_STAGE_*`** в **`config.py`**. |
+| **shared_gpu_lock** | Опциональный **`warm_callback`** в **`GPUResourceManager.acquire`**. |
+
+**Вручную на VPS:** применить DDL из **`init_db.sql`** к существующей **`clicks.db`** (или миграция), положить **`GeoLite2-Country.mmdb`** при необходимости fallback GEO, cron для **`recalc_shave.py`** и **`retry_postbacks.py`**.
+
+### Сессия 13 (28.03.2026) — План 10–14 (добивка), секреты, UI
+
+| Область | Изменение |
+|---------|-----------|
+| **Монорепа** | `GitHub/.secrets.env` + `.secrets.env.example`; загрузка в **ContentHub** `main.py`, **Orchestrator** `config.py`, **ShortsProject** `pipeline/config.py`, **PreLend** `internal_api/config.py` + `python-dotenv` в requirements Internal API. Корневой **`GitHub/.gitignore`** игнорирует `.secrets.env`. |
+| **ContentHub backend** | `backend/integrations/prelend_client.py` — шим к **Orchestrator**; **config_writer**: `git_config_log/show/revert`; **configs.py**: `GET /api/configs/history*`, `POST .../revert`; **advertisers**: `GET /api/advertisers/compare`; **analytics**: `GET /api/analytics/audit` → **require_admin**; **auth**: `require_operator_or_internal` для **POST /api/events**; **config**: `INTERNAL_EVENTS_KEY`. |
+| **ContentHub frontend** | Вкладки **Сравнение по метрикам**, **История конфигов**; **AuditPage** + маршрут `/audit`; **api.ts** расширен; адаптив сайдбара/main. |
+| **PreLend** | `GET /metrics` → поле **`by_advertiser`**; **ContentHubEvents.php** + postback → ContentHub при `CONTENTHUB_URL` / ключе. |
+| **Orchestrator** | LLM-as-judge в evaluator, отложенный LLM в evolution по `pipeline_state`, дайджест + карточка + push в ContentHub, `LOG_FORMAT=json`. |
+| **Тесты CH** | `pytest backend/tests/ -q` (без integration) → **33 passed** (актуально на момент обновления status). |
+
+**Gitignore:** `ContentHub/.gitignore` — комментарий к порядку `.env`, `secrets.local.env`; дубликаты `__pycache__`/`backend/.env` убраны с хвоста файла.

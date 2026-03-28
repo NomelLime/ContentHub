@@ -11,6 +11,7 @@ const ConfigPage    = lazy(() => import('./pages/ConfigPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const OperatorCommandsPage = lazy(() => import('./pages/OperatorCommandsPage'))
 const UsersPage     = lazy(() => import('./pages/UsersPage'))
+const AuditPage     = lazy(() => import('./pages/AuditPage'))
 const LoginPage     = lazy(() => import('./pages/LoginPage'))
 
 /**
@@ -72,13 +73,13 @@ function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+      <aside className="w-full md:w-52 flex-shrink-0 bg-gray-900 border-b md:border-b-0 md:border-r border-gray-800 flex flex-col max-h-[40vh] md:max-h-none">
         <div className="p-5 border-b border-gray-800">
           <span className="text-lg font-bold text-white">ContentHub</span>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto md:overflow-visible">
           {NAV.map(({ to, label }) => (
             <NavLink
               key={to}
@@ -95,17 +96,30 @@ function Layout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
           {isAdmin && (
-            <NavLink
-              to="/users"
-              className={({ isActive }) => clsx(
-                'block px-4 py-2.5 rounded-lg text-sm transition-colors',
-                isActive
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800',
-              )}
-            >
-              Пользователи
-            </NavLink>
+            <>
+              <NavLink
+                to="/audit"
+                className={({ isActive }) => clsx(
+                  'block px-4 py-2.5 rounded-lg text-sm transition-colors',
+                  isActive
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                )}
+              >
+                Аудит
+              </NavLink>
+              <NavLink
+                to="/users"
+                className={({ isActive }) => clsx(
+                  'block px-4 py-2.5 rounded-lg text-sm transition-colors',
+                  isActive
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800',
+                )}
+              >
+                Пользователи
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="p-3 border-t border-gray-800">
@@ -119,7 +133,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-auto bg-gray-950 text-white p-6">
+      <main className="flex-1 min-w-0 overflow-auto bg-gray-950 text-white p-4 sm:p-6">
         <Suspense fallback={<div className="text-gray-500">Загрузка страницы…</div>}>
           {children}
         </Suspense>
@@ -144,6 +158,7 @@ export default function App() {
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/operator-commands" element={<OperatorCommandsPage />} />
                 <Route path="/users"     element={<UsersPage />} />
+                <Route path="/audit"     element={<AuditPage />} />
               </Routes>
             </Layout>
           </RequireAuth>
