@@ -132,7 +132,16 @@ try {
 
     if ($backendProc.HasExited) { throw "Backend process exited. Check $backendErr" }
     if ($frontendProc.HasExited) { throw "Frontend process exited. Check $frontendErr" }
-    if ($null -ne $tunnelProc -and $tunnelProc.HasExited) { throw "SSH tunnel process exited. Check $tunnelErr" }
+    if ($null -ne $tunnelProc -and $tunnelProc.HasExited) {
+      $tail = ""
+      if (Test-Path -LiteralPath $tunnelErr) {
+        $tail = (Get-Content -LiteralPath $tunnelErr -Tail 8 -ErrorAction SilentlyContinue) -join "`n"
+      }
+      if ($tail) {
+        throw "SSH tunnel process exited. Log $tunnelErr :`n$tail"
+      }
+      throw "SSH tunnel process exited. Check $tunnelErr"
+    }
   }
 }
 finally {

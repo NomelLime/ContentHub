@@ -167,16 +167,29 @@ def write_pl_settings(data: Dict, username: str = "contenthub") -> None:
             message=f"[ContentHub:{username}] PL settings update (fallback local write)",
         )
         logger.warning("[ConfigWriter] write_pl_settings: использован fallback на локальную запись")
-        # Важно: подтверждаем, что источник данных (Internal API) теперь тоже видит новые значения.
-        # Если нет — не считаем операцию успешной, иначе UI покажет ложный "успех".
+        if getattr(cfg, "PL_SETTINGS_TRUST_LOCAL_FALLBACK", False):
+            logger.warning(
+                "[ConfigWriter] CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1 — пропуск сверки с Internal API"
+            )
+            return
+        # Подтверждаем, что API видит те же данные (иначе UI и прод на VPS разъедутся).
         remote = client.get_settings()
-        if isinstance(remote, dict):
-            for key, value in data.items():
-                if remote.get(key) != value:
-                    raise RuntimeError(
-                        "Internal API не подтвердил сохранение settings. "
-                        "Скорее всего запущена legacy версия API на другом инстансе."
-                    )
+        if not remote:
+            raise RuntimeError(
+                "Internal API не вернул settings после локальной записи. "
+                "Проверьте PL_INTERNAL_API_URL, SSH-туннель на порт 9090 и PL_INTERNAL_API_KEY. "
+                "Для локальной разработки без VPS: CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1 в backend/.env"
+            )
+        mismatches = [k for k, v in data.items() if remote.get(k) != v]
+        if mismatches:
+            raise RuntimeError(
+                "Локальный settings.json обновлён, но Internal API отдаёт другие значения "
+                f"(поля: {mismatches[:12]}{'…' if len(mismatches) > 12 else ''}). "
+                "Обычно: нет туннеля к VPS, другой API-ключ или на VPS отклонён PUT (лишние ключи в JSON). "
+                "См. логи PreLend internal_api."
+            )
+    except RuntimeError:
+        raise
     except Exception as exc:
         raise RuntimeError("Не удалось записать PL settings через Internal API и локально") from exc
 

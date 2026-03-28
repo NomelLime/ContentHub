@@ -13,9 +13,12 @@ GET  /api/configs/Orchestrator/zones     → зоны доверия
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 
 from services.auth import log_audit, require_operator, require_viewer
@@ -130,7 +133,12 @@ def update_pl_settings(
         else:
             merged[key] = value
 
-    write_pl_settings(merged, username=user["username"])
+    try:
+        write_pl_settings(merged, username=user["username"])
+    except RuntimeError as exc:
+        logger.warning("[configs] write_pl_settings: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     log_audit(user, "config_write", "PreLend", {"keys": list(updates.keys())})
     return {"success": True, "settings": merged}
 

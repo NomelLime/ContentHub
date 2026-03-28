@@ -130,6 +130,11 @@ WS_BROADCAST_SEC        = int(os.getenv("WS_BROADCAST_SEC",     "5"))
 PL_INTERNAL_API_URL = os.getenv("PL_INTERNAL_API_URL", "http://localhost:9090")
 PL_INTERNAL_API_KEY = os.getenv("PL_INTERNAL_API_KEY", "")
 
+# Dev: после локальной записи settings.json не требовать совпадения с GET API (туннель/API недоступен)
+PL_SETTINGS_TRUST_LOCAL_FALLBACK = os.getenv(
+    "CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK", ""
+).lower() in ("1", "true", "yes")
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Cookie
 # ──────────────────────────────────────────────────────────────────────────────
