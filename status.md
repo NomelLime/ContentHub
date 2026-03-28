@@ -118,15 +118,20 @@ GITHUB_ROOT=/path/to/projects    # Обязательно — иначе Environ
 CONTENTHUB_HOST=0.0.0.0
 CONTENTHUB_PORT=8000
 
-# CORS: задать конкретный origin, НЕ "*" (несовместимо с allow_credentials=True)
-ALLOWED_ORIGINS=http://localhost:5173
+# CORS: задать конкретные origin, НЕ "*" (несовместимо с allow_credentials=True)
+# По умолчанию в config.py уже включены 5173/3000/4173 и 127.0.0.1 — при необходимости переопредели:
+# ALLOWED_ORIGINS=http://localhost:5173,http://localhost:4173
 
 # Cookie secure (false для localhost, true для HTTPS)
 COOKIE_SECURE=false
 
 # PreLend Internal API (VPS → SSH tunnel → localhost:9090)
 PL_INTERNAL_API_URL=http://localhost:9090
-PL_INTERNAL_API_KEY=   # python3 -c "import secrets; print(secrets.token_hex(32))"
+PL_INTERNAL_API_KEY=   # тот же ключ, что PL_INTERNAL_API_KEY на VPS (internal_api)
+# Dev: если туннеля нет, но правишь локальный PreLend/config/settings.json:
+# CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1
+# Устаревание RUNNING в панели агентов SP (минуты):
+# SP_AGENT_STATUS_STALE_MINUTES=25
 ```
 
 ---
@@ -238,7 +243,8 @@ PreLend теперь на VPS. Все операции через HTTP к Intern
 
 - [x] `grep -rn "localStorage" ContentHub/frontend/src/` — нет реальных вызовов (только комментарии)
 - [x] `backend/tests/test_token_rotation.py` — 4 теста token rotation
-- [ ] `python -m pytest ContentHub/backend/tests/ -q` — запустить на деплое
+- [x] `python -m pytest backend/tests/ -q` — юнит-тесты (без живого PreLend)
+- [ ] `PL_INTERNAL_API_INTEGRATION=1 python -m pytest tests/test_prelend_internal_api_live.py -v` — проверка туннеля :9090 и ключа
 - [ ] Smoke: login → dashboard → кнопки start/stop видны admin
 - [ ] Smoke: login → F5 → role сохранился (in-memory через /refresh)
 - [ ] Smoke: `curl localhost:8000/health` → ok
@@ -393,3 +399,31 @@ http://localhost:8000/health
 | **`frontend/src/lib/api.ts`** | **`operatorCommands.trace(limit)`**. |
 
 Данные для дашборда по-прежнему приходят из `metrics_collector` → кэш `metrics_cache` (поля телеметрии расширены на стороне Orchestrator).
+
+### Сессия 11 (28.03.2026) — Вход, превью, агенты SP, PreLend settings, туннель
+
+**Симптомы:** HTTP 500 при логине с `vite preview` (:4173); «RUNNING» у EDITOR при мёртвом процессе; HTTP 500 при сохранении шаблона клоаки / настройки PreLend; падение `run-all` из‑за `plink` (пароль).
+
+| Область | Изменение |
+|---------|-----------|
+| **`frontend/vite.config.ts`** | Прокси `/api` и `/ws` продублированы в **`preview`** (раньше только `server`). Без этого запросы с `:4173` не доходили до FastAPI → 500/ошибки на `/auth/login`. |
+| **`backend/config.py`** | Дефолт **`ALLOWED_ORIGINS`**: `localhost`/`127.0.0.1` для портов **5173, 3000, 4173** (CORS при обращении к backend с другого origin). |
+| **`backend/services/auth.py`** | **`verify_password`**: `try/except` вокруг `bcrypt.checkpw` — битый хеш в SQLite не даёт необработанный 500. |
+| **`frontend/.../AgentPanel.tsx`** | Статус вида **`RUNNING: …`** для цвета и кнопок разбирается по первому токену до **`:`** (совпадает с форматом в `agent_memory.json`). |
+| **`backend/services/agent_controller.py`** | Устаревшие **`RUNNING`/`WAITING`**: по **`kv.agent_status_updated_at`** и fallback на mtime файла; порог **`SP_AGENT_STATUS_STALE_MINUTES`** (дефолт 25). В ответе — **`UNKNOWN`** + пояснение в `detail`. |
+| **`ShortsProject/pipeline/agent_memory.py`** | **`set_agent_status`** пишет **`kv.agent_status_updated_at[AGENT]`** и вызывает **`_save()`** — снимок на диске соответствует последнему статусу. |
+| **`backend/services/config_writer.py`** | **`write_pl_settings`**: явные **`RuntimeError`** при пустом GET после fallback, список расходящихся полей; опция **`CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1`** пропускает сверку с API (только dev). |
+| **`backend/config.py`** | Флаг **`PL_SETTINGS_TRUST_LOCAL_FALLBACK`** из env. |
+| **`backend/api/routes/configs.py`** | **`RuntimeError`** из `write_pl_settings` → **HTTP 502** с `detail` (вместо голого 500). |
+| **`run-all.ps1`** | При выходе туннеля в исключение подмешиваются последние строки **`tunnel.err.log`**. |
+| **PreLend** `internal_api/routes/configs.py` | Whitelist **`settings`**: добавлены **`test_conversion_day`**, **`postback_token`** — иначе полный PUT из ContentHub мог получать **400** на VPS. |
+
+**Операционно (кратко):**
+- Туннель: `ssh -N -L 9090:127.0.0.1:9090 user@vps` (или `plink` из `run-all.local.cmd`); **`PL_INTERNAL_API_KEY`** совпадает в **`ContentHub/backend/.env`** и в env **`prelend-internal-api`** на VPS.
+- Перезапуск Internal API на VPS: **`sudo systemctl restart prelend-internal-api`**.
+- Тесты ContentHub после правок: **`pytest backend/tests/ -q`** → **30 passed** (актуально на момент сессии).
+
+**Чеклист (обновить вручную при деплое):**
+- [x] Логин с `http://localhost:4173` после `npm run build` + `npm run preview`
+- [x] Сохранение **`cloak_template`** при живом туннеле и совпадающем API-ключе (или `CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1` только для локального JSON)
+- [ ] На VPS: задеплоен актуальный **`internal_api/routes/configs.py`** (whitelist), сервис перезапущен

@@ -13,6 +13,7 @@ PUT    /api/advertisers/geo-data  → обновить geo_data.json
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated, Dict, List, Optional
 
@@ -26,6 +27,8 @@ from services.config_writer import (
     write_pl_advertisers,
     write_pl_geo_data,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/advertisers", tags=["advertisers"])
 
@@ -85,7 +88,12 @@ def create_advertiser(
     new_adv = body.model_dump()
     new_adv["id"] = f"adv_{uuid.uuid4().hex[:8]}"
     advertisers.append(new_adv)
-    write_pl_advertisers(advertisers, username=user["username"])
+    try:
+        write_pl_advertisers(advertisers, username=user["username"])
+    except RuntimeError as exc:
+        logger.warning("[advertisers] create: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     log_audit(user, "advertiser_create", "PreLend", {"id": new_adv["id"], "name": new_adv["name"]})
     return {**_mask_secrets(new_adv), "id": new_adv["id"]}
 
@@ -113,19 +121,13 @@ def update_advertiser(
     user: Annotated[dict, Depends(require_operator)],
 ):
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    ok = write_pl_advertiser(advertiser_id, updates, username=user["username"])
+    try:
+        ok = write_pl_advertiser(advertiser_id, updates, username=user["username"])
+    except RuntimeError as exc:
+        logger.warning("[advertisers] update %s: %s", advertiser_id, exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     if not ok:
-        # Различаем "не найден" и "есть, но не удалось синхронно сохранить".
-        exists = any(a.get("id") == advertiser_id for a in read_pl_advertisers())
-        if exists:
-            raise HTTPException(
-                500,
-                detail=(
-                    f"Не удалось сохранить рекламодателя '{advertiser_id}': "
-                    "источник данных PreLend не подтвердил изменение. "
-                    "Проверьте Internal API / туннель."
-                ),
-            )
         raise HTTPException(404, detail=f"Рекламодатель '{advertiser_id}' не найден")
     log_audit(user, "advertiser_update", "PreLend", {"id": advertiser_id, "fields": list(updates.keys())})
     return {"success": True, "id": advertiser_id, "updated": list(updates.keys())}
@@ -137,7 +139,12 @@ def delete_advertiser(
     user: Annotated[dict, Depends(require_operator)],
 ):
     # Soft delete: меняем status → 'deleted'
-    ok = write_pl_advertiser(advertiser_id, {"status": "deleted"}, username=user["username"])
+    try:
+        ok = write_pl_advertiser(advertiser_id, {"status": "deleted"}, username=user["username"])
+    except RuntimeError as exc:
+        logger.warning("[advertisers] delete %s: %s", advertiser_id, exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     if not ok:
         raise HTTPException(404, detail=f"Рекламодатель '{advertiser_id}' не найден")
     log_audit(user, "advertiser_delete", "PreLend", {"id": advertiser_id})

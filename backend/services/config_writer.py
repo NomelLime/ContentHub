@@ -26,6 +26,14 @@ import config as cfg
 logger = logging.getLogger(__name__)
 
 
+def _trust_pl_local_fallback() -> bool:
+    """Пропуск сверки с Internal API после локальной записи (dev / без туннеля к VPS)."""
+    return bool(
+        getattr(cfg, "PL_SETTINGS_TRUST_LOCAL_FALLBACK", False)
+        or getattr(cfg, "PL_TRUST_LOCAL_FALLBACK", False)
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Базовый атомарный write
 # ──────────────────────────────────────────────────────────────────────────────
@@ -167,9 +175,10 @@ def write_pl_settings(data: Dict, username: str = "contenthub") -> None:
             message=f"[ContentHub:{username}] PL settings update (fallback local write)",
         )
         logger.warning("[ConfigWriter] write_pl_settings: использован fallback на локальную запись")
-        if getattr(cfg, "PL_SETTINGS_TRUST_LOCAL_FALLBACK", False):
+        if _trust_pl_local_fallback():
             logger.warning(
-                "[ConfigWriter] CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1 — пропуск сверки с Internal API"
+                "[ConfigWriter] trust local fallback — пропуск сверки settings с Internal API "
+                "(CONTENTHUB_PL_*_TRUST_LOCAL_FALLBACK или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK)"
             )
             return
         # Подтверждаем, что API видит те же данные (иначе UI и прод на VPS разъедутся).
@@ -178,7 +187,7 @@ def write_pl_settings(data: Dict, username: str = "contenthub") -> None:
             raise RuntimeError(
                 "Internal API не вернул settings после локальной записи. "
                 "Проверьте PL_INTERNAL_API_URL, SSH-туннель на порт 9090 и PL_INTERNAL_API_KEY. "
-                "Для локальной разработки без VPS: CONTENTHUB_PL_SETTINGS_TRUST_LOCAL_FALLBACK=1 в backend/.env"
+                "Для локальной разработки без VPS: CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 в backend/.env"
             )
         mismatches = [k for k, v in data.items() if remote.get(k) != v]
         if mismatches:
@@ -214,20 +223,31 @@ def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None
             message=f"[ContentHub:{username}] PL advertisers update (fallback local write)",
         )
         logger.warning("[ConfigWriter] write_pl_advertisers: использован fallback на локальную запись")
+        if _trust_pl_local_fallback():
+            logger.warning("[ConfigWriter] trust local fallback — пропуск сверки advertisers с API")
+            return
         remote = client.get_advertisers()
-        if isinstance(remote, list) and len(remote) == len(data):
-            # Сверяем минимум id + template/status как индикаторы успешной записи.
-            local_map = {str(a.get("id")): a for a in data}
-            for r in remote:
-                rid = str(r.get("id"))
-                if rid not in local_map:
-                    raise RuntimeError("Internal API вернул другой набор advertisers после fallback")
-                l = local_map[rid]
-                if r.get("template") != l.get("template") or r.get("status") != l.get("status"):
-                    raise RuntimeError(
-                        "Internal API не подтвердил сохранение advertisers. "
-                        "Вероятно, работает другой (legacy) источник."
-                    )
+        if not isinstance(remote, list) or len(remote) != len(data):
+            raise RuntimeError(
+                "Локальный advertisers.json обновлён, но GET /config/advertisers с API пустой или другой длины. "
+                "Проверьте туннель :9090 и PL_INTERNAL_API_KEY. "
+                "Или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 в backend/.env для работы только с локальным PreLend."
+            )
+        local_map = {str(a.get("id")): a for a in data}
+        for r in remote:
+            rid = str(r.get("id"))
+            if rid not in local_map:
+                raise RuntimeError(
+                    "Internal API вернул другой набор id рекламодателей после локальной записи."
+                )
+            l = local_map[rid]
+            if r.get("template") != l.get("template") or r.get("status") != l.get("status"):
+                raise RuntimeError(
+                    f"API не подтвердил запись advertisers (расхождение template/status у id={rid}). "
+                    "Проверьте Internal API / туннель."
+                )
+    except RuntimeError:
+        raise
     except Exception as exc:
         raise RuntimeError("Не удалось записать PL advertisers через Internal API и локально") from exc
 
@@ -255,20 +275,34 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
             "[ConfigWriter] write_pl_advertiser(%s): использован fallback на локальную запись",
             advertiser_id,
         )
-        # Подтверждаем через Internal API, что изменение действительно применено.
+        if _trust_pl_local_fallback():
+            logger.warning(
+                "[ConfigWriter] trust local fallback — пропуск сверки рекламодателя %s с API",
+                advertiser_id,
+            )
+            return True
         remote = client.get_advertisers()
         r_target = next((a for a in remote if a.get("id") == advertiser_id), None) if isinstance(remote, list) else None
         if not isinstance(r_target, dict):
-            raise RuntimeError("Internal API не вернул обновленного рекламодателя после fallback")
-        for k, v in updates.items():
-            if r_target.get(k) != v:
-                raise RuntimeError(
-                    "Internal API не подтвердил сохранение рекламодателя. "
-                    "Вероятно, используется legacy API/другой инстанс."
-                )
+            raise RuntimeError(
+                f"Локально обновлён '{advertiser_id}', но Internal API не вернул эту запись в списке. "
+                "Проверьте PL_INTERNAL_API_URL, SSH-туннель на 9090 и ключ. "
+                "Или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 для локального PreLend без VPS."
+            )
+        mismatched = [k for k, v in updates.items() if r_target.get(k) != v]
+        if mismatched:
+            raise RuntimeError(
+                f"Локально обновлён '{advertiser_id}', но API отдаёт другие значения для полей: {mismatched}. "
+                "Часто: PUT /config/advertisers на VPS не прошёл (сеть/ключ), а чтение идёт с другого источника. "
+                "Проверьте логи prelend-internal-api и туннель."
+            )
         return True
-    except Exception:
-        return False
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            f"Не удалось записать рекламодателя '{advertiser_id}' через Internal API и локально"
+        ) from exc
 
 
 def write_pl_geo_data(data: Dict, username: str = "contenthub") -> None:
