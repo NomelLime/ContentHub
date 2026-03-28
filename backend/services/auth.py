@@ -37,7 +37,13 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    if not hashed or not isinstance(hashed, str):
+        return False
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        # Невалидный хеш в БД — иначе FastAPI отдаёт 500 на /login
+        return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
