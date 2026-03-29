@@ -118,7 +118,13 @@ RequireAuth → initAuth() → POST /api/auth/refresh
 
 ## ENV (.env.example + монорепа)
 
-**Порядок загрузки (backend/main.py):** сначала **`GitHub/.secrets.env`** (если есть), затем **`backend/.env`** (переопределения). Шаблон общего файла: **`GitHub/.secrets.env.example`**. Такой же `.secrets.env` подхватывают Orchestrator (`config.py`), ShortsProject (`pipeline/config.py`), PreLend Internal API (`internal_api/config.py`).
+**В git (источник правды по секретам):** **`GitHub/secrets.enc.env`** (SOPS) + **`.sops.yaml`** (публичные ключи age). Приватный ключ только локально/VPS: **`age/age.key`**, переменная **`SOPS_AGE_KEY_FILE`**. Рабочий plaintext для правок: **`secrets.plain.env`** → `scripts/sops-encrypt.*` → коммит **`secrets.enc.env`**. Подробно: **`SECRETS-SOPS.md`**, скрипты **`scripts/sops-*.ps1`** / **`sops-run-contenthub.*`**.
+
+**Порядок загрузки в процессе (backend/main.py):** сначала **`GitHub/.secrets.env`** (если файл есть — типично после `sops-decrypt` или старый dev), затем **`backend/.env`** (переопределения). Если секреты уже в **`os.environ`** (например **`sops exec-env secrets.enc.env -- uvicorn …`**), `load_dotenv` не подменяет их (`override=False` для общего файла). Тот же приоритет `.secrets.env` → локальный `.env` у Orchestrator (`config.py`), ShortsProject (`pipeline/config.py`), PreLend Internal API (`internal_api/config.py`).
+
+**PreLend на VPS (SOPS):** расшифровка в **`/run/prelend.env`**, systemd **`EnvironmentFile`** для php-fpm и **`prelend-internal-api`**; отдельного **`GitHub/.secrets.env`** на сервере нет. См. **`PreLend/deploy/vps_one_command.sh`**.
+
+Шаблон имён переменных (не коммитить значения): **`GitHub/.secrets.env.example`**, **`GitHub/secrets.plain.env.example`**.
 
 ```env
 # JWT
@@ -405,7 +411,7 @@ http://localhost:8000/health
 | **Сборка** | После изменений фронта: `npm run build` (обновление `dist` для `vite preview`). |
 | **Тесты** | `pytest backend/tests/ -q` → **26 passed** (включая новые). |
 
-**Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на `config/` + `data/`; ключ `PL_INTERNAL_API_KEY` совпадает с ContentHub `backend/.env`.
+**Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на `config/` + `data/`; **`PL_INTERNAL_API_KEY`** совпадает с ContentHub **`backend/.env`** (локально) или с переменными из **`/run/prelend.env`** при деплое через SOPS (**`deploy/vps_one_command.sh`**).
 
 ### Сессия 10 (27.03.2026) — Телеметрия Orchestrator на дашборде, вкладка команд оператора
 
@@ -440,7 +446,7 @@ http://localhost:8000/health
 | **PreLend** `internal_api/routes/configs.py` | Whitelist **`settings`**: добавлены **`test_conversion_day`**, **`postback_token`** — иначе полный PUT из ContentHub мог получать **400** на VPS. |
 
 **Операционно (кратко):**
-- Туннель: `ssh -N -L 9090:127.0.0.1:9090 user@vps` (или `plink` из `run-all.local.cmd`); **`PL_INTERNAL_API_KEY`** совпадает в **`ContentHub/backend/.env`** и в env **`prelend-internal-api`** на VPS.
+- Туннель: `ssh -N -L 9090:127.0.0.1:9090 user@vps` (или `plink` из `run-all.local.cmd`); **`PL_INTERNAL_API_KEY`** совпадает в **`ContentHub/backend/.env`** и в окружении Internal API на VPS (**`systemd` + `/run/prelend.env`** при SOPS или явный **`Environment=`** в unit).
 - Перезапуск Internal API на VPS: **`sudo systemctl restart prelend-internal-api`**.
 - Тесты ContentHub после правок: **`pytest backend/tests/ -q`** → **30 passed** (актуально на момент сессии).
 
@@ -467,7 +473,7 @@ http://localhost:8000/health
 
 | Область | Изменение |
 |---------|-----------|
-| **Монорепа** | `GitHub/.secrets.env` + `.secrets.env.example`; загрузка в **ContentHub** `main.py`, **Orchestrator** `config.py`, **ShortsProject** `pipeline/config.py`, **PreLend** `internal_api/config.py` + `python-dotenv` в requirements Internal API. Корневой **`GitHub/.gitignore`** игнорирует `.secrets.env`. |
+| **Монорепа** | В git: **`secrets.enc.env`** + **`.sops.yaml`**; локально **`age/age.key`**. Опциональный plaintext: **`.secrets.env`** (или вывод `sops -d`) + **`.secrets.env.example`**. Код по-прежнему вызывает `load_dotenv(.../.secrets.env)` — при запуске через **`sops exec-env secrets.enc.env -- …`** переменные уже в **`os.environ`**. **ContentHub** `main.py`, **Orchestrator** `config.py`, **ShortsProject** `pipeline/config.py`, **PreLend** `internal_api/config.py`. **`GitHub/.gitignore`**: `.secrets.env`, `secrets.plain.env`, `age/`. |
 | **ContentHub backend** | `backend/integrations/prelend_client.py` — шим к **Orchestrator**; **config_writer**: `git_config_log/show/revert`; **configs.py**: `GET /api/configs/history*`, `POST .../revert`; **advertisers**: `GET /api/advertisers/compare`; **analytics**: `GET /api/analytics/audit` → **require_admin**; **auth**: `require_operator_or_internal` для **POST /api/events**; **config**: `INTERNAL_EVENTS_KEY`. |
 | **ContentHub frontend** | Вкладки **Сравнение по метрикам**, **История конфигов**; **AuditPage** + маршрут `/audit`; **api.ts** расширен; адаптив сайдбара/main. |
 | **PreLend** | `GET /metrics` → поле **`by_advertiser`**; **ContentHubEvents.php** + postback → ContentHub при `CONTENTHUB_URL` / ключе. |
