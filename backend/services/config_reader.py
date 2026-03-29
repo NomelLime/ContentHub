@@ -128,9 +128,21 @@ def _read_json_file(path: Path) -> Any:
         return None
 
 
+def _pl_trust_local_fallback() -> bool:
+    """Совпадает с config_writer: режим «только локальный клон PreLend», без сверки с VPS."""
+    return bool(
+        getattr(cfg, "PL_SETTINGS_TRUST_LOCAL_FALLBACK", False)
+        or getattr(cfg, "PL_TRUST_LOCAL_FALLBACK", False)
+    )
+
+
 def read_pl_settings() -> Dict:
-    """Читает PreLend/config/settings.json через Internal API; при недоступности API — локальный файл."""
+    """Читает PreLend/config/settings.json через Internal API; trust-local или недоступность API — локальный файл."""
     from integrations.prelend_client import get_client
+
+    if _pl_trust_local_fallback():
+        raw = _read_json_file(cfg.PL_SETTINGS)
+        return raw if isinstance(raw, dict) else {}
 
     client = get_client()
     if client.is_available():
@@ -141,8 +153,12 @@ def read_pl_settings() -> Dict:
 
 
 def read_pl_advertisers() -> List[Dict]:
-    """Читает PreLend/config/advertisers.json через Internal API; при недоступности API — локальный файл."""
+    """Читает advertisers.json: при trust-local или недоступном API — с диска, иначе через Internal API."""
     from integrations.prelend_client import get_client
+
+    if _pl_trust_local_fallback():
+        raw = _read_json_file(cfg.PL_ADVERTISERS)
+        return raw if isinstance(raw, list) else []
 
     client = get_client()
     if client.is_available():
@@ -153,8 +169,12 @@ def read_pl_advertisers() -> List[Dict]:
 
 
 def read_pl_geo_data() -> Dict:
-    """Читает PreLend/config/geo_data.json через Internal API; при недоступности API — локальный файл."""
+    """Читает geo_data.json: trust-local или API недоступен — локальный файл."""
     from integrations.prelend_client import get_client
+
+    if _pl_trust_local_fallback():
+        raw = _read_json_file(cfg.PL_GEO_DATA)
+        return raw if isinstance(raw, dict) else {}
 
     client = get_client()
     if client.is_available():
@@ -165,8 +185,12 @@ def read_pl_geo_data() -> Dict:
 
 
 def read_pl_splits() -> List[Dict]:
-    """Читает PreLend/config/splits.json через Internal API; при недоступности API — локальный файл."""
+    """Читает splits.json: trust-local или API недоступен — локальный файл."""
     from integrations.prelend_client import get_client
+
+    if _pl_trust_local_fallback():
+        raw = _read_json_file(cfg.PL_SPLITS)
+        return raw if isinstance(raw, list) else []
 
     client = get_client()
     if client.is_available():

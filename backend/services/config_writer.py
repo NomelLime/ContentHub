@@ -226,26 +226,14 @@ def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None
         if _trust_pl_local_fallback():
             logger.warning("[ConfigWriter] trust local fallback — пропуск сверки advertisers с API")
             return
-        remote = client.get_advertisers()
-        if not isinstance(remote, list) or len(remote) != len(data):
-            raise RuntimeError(
-                "Локальный advertisers.json обновлён, но GET /config/advertisers с API пустой или другой длины. "
-                "Проверьте туннель :9090 и PL_INTERNAL_API_KEY. "
-                "Или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 в backend/.env для работы только с локальным PreLend."
-            )
-        local_map = {str(a.get("id")): a for a in data}
-        for r in remote:
-            rid = str(r.get("id"))
-            if rid not in local_map:
-                raise RuntimeError(
-                    "Internal API вернул другой набор id рекламодателей после локальной записи."
-                )
-            l = local_map[rid]
-            if r.get("template") != l.get("template") or r.get("status") != l.get("status"):
-                raise RuntimeError(
-                    f"API не подтвердил запись advertisers (расхождение template/status у id={rid}). "
-                    "Проверьте Internal API / туннель."
-                )
+        # PUT не прошёл — GET с VPS всё ещё со старыми данными; сверка с API бессмысленна и даёт ложные ошибки.
+        raise RuntimeError(
+            "PreLend Internal API не принял запись (PUT /config/advertisers). "
+            "Локальный advertisers.json в репозитории уже обновлён. "
+            "Варианты: восстановить SSH-туннель на :9090 и PL_INTERNAL_API_KEY; "
+            "или для работы только с локальным клоном PreLend добавить в backend/.env "
+            "CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 — тогда ContentHub читает те же файлы и не сверяет с VPS."
+        )
     except RuntimeError:
         raise
     except Exception as exc:
@@ -255,8 +243,10 @@ def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None
 def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "contenthub") -> bool:
     """Обновляет одного рекламодателя. Возвращает True при успехе."""
     from integrations.prelend_client import get_client
+    from services.config_reader import read_pl_advertisers
+
     client = get_client()
-    advertisers = client.get_advertisers()
+    advertisers = list(read_pl_advertisers())
     target = next((a for a in advertisers if a.get("id") == advertiser_id), None)
     if target is None:
         return False
@@ -281,22 +271,12 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
                 advertiser_id,
             )
             return True
-        remote = client.get_advertisers()
-        r_target = next((a for a in remote if a.get("id") == advertiser_id), None) if isinstance(remote, list) else None
-        if not isinstance(r_target, dict):
-            raise RuntimeError(
-                f"Локально обновлён '{advertiser_id}', но Internal API не вернул эту запись в списке. "
-                "Проверьте PL_INTERNAL_API_URL, SSH-туннель на 9090 и ключ. "
-                "Или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 для локального PreLend без VPS."
-            )
-        mismatched = [k for k, v in updates.items() if r_target.get(k) != v]
-        if mismatched:
-            raise RuntimeError(
-                f"Локально обновлён '{advertiser_id}', но API отдаёт другие значения для полей: {mismatched}. "
-                "Часто: PUT /config/advertisers на VPS не прошёл (сеть/ключ), а чтение идёт с другого источника. "
-                "Проверьте логи prelend-internal-api и туннель."
-            )
-        return True
+        raise RuntimeError(
+            "PreLend Internal API не принял запись (PUT /config/advertisers). "
+            f"Рекламодатель '{advertiser_id}' обновлён в локальном advertisers.json. "
+            "Варианты: восстановить туннель :9090 и PL_INTERNAL_API_KEY; "
+            "или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 в backend/.env для режима только локальных файлов."
+        )
     except RuntimeError:
         raise
     except Exception as exc:
