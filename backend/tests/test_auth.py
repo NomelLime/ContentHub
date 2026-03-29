@@ -135,8 +135,16 @@ class TestChangePassword:
             json={"new_password": "newpassword123"},
             headers=auth_headers(admin_token),
         )
-        assert resp.status_code == 400
-        assert "пароль" in resp.json()["detail"].lower()
+        # Pydantic: обязательное поле old_password отсутствует → 422, не обработчик смены пароля
+        assert resp.status_code == 422
+        body = resp.json()
+        assert "detail" in body
+        errs = body["detail"]
+        assert isinstance(errs, list)
+        assert any(
+            isinstance(e, dict) and "old_password" in str(e.get("loc", []))
+            for e in errs
+        )
 
     def test_change_password_success(self, client, admin_token):
         resp = client.post(
