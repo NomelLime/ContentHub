@@ -124,6 +124,15 @@ try {
   if ($backendOk) { Write-Host "  [OK] Backend /health" } else { Write-Host "  [FAIL] Backend /health (see $backendErr)" }
   $frontendOk = Test-HttpOk -Url "http://localhost:$FrontendPort"
   if ($frontendOk) { Write-Host "  [OK] Frontend root" } else { Write-Host "  [FAIL] Frontend root (see $frontendErr)" }
+  if (-not $NoTunnel -and $null -ne $tunnelProc -and -not $tunnelProc.HasExited) {
+    Start-Sleep -Milliseconds 800
+    try {
+      Invoke-RestMethod -Uri "http://127.0.0.1:$TunnelLocalPort/health" -TimeoutSec 8 -ErrorAction Stop | Out-Null
+      Write-Host "  [OK] PreLend Internal API http://127.0.0.1:$TunnelLocalPort/health" -ForegroundColor Green
+    } catch {
+      Write-Host "  [WARN] PreLend Internal API на :$TunnelLocalPort не отвечает — задайте CH_TUNNEL_TARGET и проверьте VPS (systemctl status prelend-internal-api). Скрипт: scripts\verify-prelend-internal-api.ps1" -ForegroundColor Yellow
+    }
+  }
   Write-Host ""
   Write-Host "Press Ctrl+C to stop all processes."
 
