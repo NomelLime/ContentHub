@@ -76,7 +76,16 @@ _is_temp_secret     = False
 _env_secret = os.getenv("CONTENTHUB_SECRET_KEY", "").strip()
 if _env_secret and _env_secret != _DEFAULT_SECRET:
     SECRET_KEY = _env_secret
+elif os.getenv("COOKIE_SECURE", "false").lower() == "true":
+    # [FIX] Production (HTTPS) — hard fail без настоящего ключа.
+    # Временный ключ в prod = сброс всех сессий при рестарте + несовместимость между workers.
+    raise EnvironmentError(
+        "CONTENTHUB_SECRET_KEY не задан, а COOKIE_SECURE=true (production mode). "
+        "Сгенерируйте: python3 -c \"import secrets; print(secrets.token_hex(32))\" "
+        "и добавьте в backend/.env"
+    )
 else:
+    # Dev mode: временный ключ допустим
     SECRET_KEY      = _secrets.token_hex(32)
     _is_temp_secret = True
     import logging as _log

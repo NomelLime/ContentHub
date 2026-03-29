@@ -329,28 +329,31 @@ def update_user_role(
     return {"success": True, "message": "Роль обновлена"}
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
 @router.post("/change-password", response_model=SuccessResponse)
 def change_password(
-    body: dict,
+    body: ChangePasswordRequest,
     user: Annotated[dict, Depends(require_viewer)],
 ):
     """Смена пароля (любой авторизованный пользователь — своего)."""
     from services.auth import hash_password
-    old_pwd = body.get("old_password", "")
-    new_pwd = body.get("new_password", "")
-    if len(new_pwd) < 8:
+    if len(body.new_password) < 8:
         raise HTTPException(400, detail="Пароль должен быть не менее 8 символов")
     with get_db() as db:
         row = db.execute(
             "SELECT password_hash FROM users WHERE id=?",
             (user["id"],),
         ).fetchone()
-    if not row or not verify_password(old_pwd, row["password_hash"]):
+    if not row or not verify_password(body.old_password, row["password_hash"]):
         raise HTTPException(400, detail="Текущий пароль неверен")
     with get_db() as db:
         db.execute(
             "UPDATE users SET password_hash=? WHERE id=?",
-            (hash_password(new_pwd), user["id"]),
+            (hash_password(body.new_password), user["id"]),
         )
         db.commit()
     log_audit(user, "password_change", None, {})

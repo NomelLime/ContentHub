@@ -58,7 +58,10 @@ def _collect_prelend() -> Dict[str, Any]:
         out["conversions_24h"] = int(metrics.get("conversions") or 0)
         bot_raw = metrics.get("bot_pct")
         if bot_raw is not None:
-            out["bot_pct"] = float(bot_raw) / 100.0 if float(bot_raw) > 1 else float(bot_raw)
+            # [FIX] PreLend /metrics всегда возвращает bot_pct как проценты (0–100).
+            # Было: эвристика "> 1 → делим на 100" — ломается на 1.5% (это 1.5%, не 150%).
+            # Стало: всегда делим на 100 → доля (0.0–1.0).
+            out["bot_pct"] = round(float(bot_raw) / 100.0, 4)
 
         landing = health.get("landing") if isinstance(health, dict) else None
         if isinstance(landing, dict):

@@ -481,3 +481,12 @@ http://localhost:8000/health
 | **Тесты CH** | `pytest backend/tests/ -q` (без integration) → **33 passed** (актуально на момент обновления status). |
 
 **Gitignore:** `ContentHub/.gitignore` — комментарий к порядку `.env`, `secrets.local.env`; дубликаты `__pycache__`/`backend/.env` убраны с хвоста файла.
+
+### Сессия 12 (29.03.2026) — Code Review: Auth & Config Fixes
+
+| Область | Изменение |
+|---------|-----------|
+| **`backend/config.py`** | **[HIGH]** SECRET_KEY: при `COOKIE_SECURE=true` (production) и отсутствии `CONTENTHUB_SECRET_KEY` → `EnvironmentError` вместо молчаливого временного ключа. В dev-mode (без COOKIE_SECURE) поведение не изменилось. |
+| **`backend/api/routes/auth.py`** | **[MEDIUM]** `change_password`: `body: dict` → `ChangePasswordRequest(BaseModel)` с полями `old_password`, `new_password`. Автоматическая валидация Pydantic, корректная OpenAPI схема. |
+
+**Контекст:** Часть полного code review экосистемы. Также рекомендовано: LIKE wildcard экранирование в будущем Audit Log endpoint (план сессии 13.2).
