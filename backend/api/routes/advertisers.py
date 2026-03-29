@@ -56,8 +56,8 @@ def get_templates(user: Annotated[dict, Depends(require_viewer)]):
 
 @router.get("/compare")
 def compare_advertisers_metrics(
+    user: Annotated[dict, Depends(require_viewer)],
     period_hours: int = Query(24, ge=1, le=168),
-    user: Annotated[dict, Depends(require_viewer)] = None,
 ):
     """
     Сводка по рекламодателям: конфиг (имя, ставка, статус) + метрики из PreLend Internal API

@@ -119,28 +119,61 @@ def read_sp_env() -> Dict[str, Dict[str, Any]]:
 # PreLend
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _read_json_file(path: Path) -> Any:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def read_pl_settings() -> Dict:
-    """Читает PreLend/config/settings.json через Internal API."""
+    """Читает PreLend/config/settings.json через Internal API; при недоступности API — локальный файл."""
     from integrations.prelend_client import get_client
-    return get_client().get_settings()
+
+    client = get_client()
+    if client.is_available():
+        data = client.get_settings()
+        return data if isinstance(data, dict) else {}
+    raw = _read_json_file(cfg.PL_SETTINGS)
+    return raw if isinstance(raw, dict) else {}
 
 
 def read_pl_advertisers() -> List[Dict]:
-    """Читает PreLend/config/advertisers.json через Internal API."""
+    """Читает PreLend/config/advertisers.json через Internal API; при недоступности API — локальный файл."""
     from integrations.prelend_client import get_client
-    return get_client().get_advertisers()
+
+    client = get_client()
+    if client.is_available():
+        data = client.get_advertisers()
+        return data if isinstance(data, list) else []
+    raw = _read_json_file(cfg.PL_ADVERTISERS)
+    return raw if isinstance(raw, list) else []
 
 
 def read_pl_geo_data() -> Dict:
-    """Читает PreLend/config/geo_data.json через Internal API."""
+    """Читает PreLend/config/geo_data.json через Internal API; при недоступности API — локальный файл."""
     from integrations.prelend_client import get_client
-    return get_client().get_geo_data()
+
+    client = get_client()
+    if client.is_available():
+        data = client.get_geo_data()
+        return data if isinstance(data, dict) else {}
+    raw = _read_json_file(cfg.PL_GEO_DATA)
+    return raw if isinstance(raw, dict) else {}
 
 
 def read_pl_splits() -> List[Dict]:
-    """Читает PreLend/config/splits.json через Internal API."""
+    """Читает PreLend/config/splits.json через Internal API; при недоступности API — локальный файл."""
     from integrations.prelend_client import get_client
-    return get_client().get_splits()
+
+    client = get_client()
+    if client.is_available():
+        data = client.get_splits()
+        return data if isinstance(data, list) else []
+    raw = _read_json_file(cfg.PL_SPLITS)
+    return raw if isinstance(raw, list) else []
 
 
 def read_pl_templates() -> Dict[str, List[str]]:
