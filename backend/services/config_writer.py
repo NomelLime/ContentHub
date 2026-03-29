@@ -34,6 +34,45 @@ def _trust_pl_local_fallback() -> bool:
     )
 
 
+def _normalize_advertisers_for_api(data: List[Dict]) -> List[Dict]:
+    """
+    PUT /config/advertisers на Internal API требует у каждого объекта ключи id, name, status.
+    Дополняем пустые значения, чтобы не получать 400 из-за старых/урезанных записей.
+    """
+    out: List[Dict] = []
+    for raw in data:
+        item = dict(raw)
+        aid = str(item.get("id") or "").strip()
+        if not aid:
+            raise RuntimeError(
+                "В списке рекламодателей есть запись без id — Internal API отклонит PUT. "
+                "Исправьте PreLend/config/advertisers.json."
+            )
+        item["id"] = aid
+        name = item.get("name")
+        if name is None or (isinstance(name, str) and not str(name).strip()):
+            item["name"] = aid
+        else:
+            item["name"] = str(name).strip()
+        st = item.get("status")
+        if st is None or (isinstance(st, str) and not str(st).strip()):
+            item["status"] = "active"
+        else:
+            item["status"] = str(st).strip()
+        out.append(item)
+    return out
+
+
+def _append_api_put_hint(msg: str, client: Any) -> str:
+    try:
+        detail = client.last_put_error
+    except Exception:
+        detail = None
+    if isinstance(detail, str) and detail.strip():
+        return f"{msg} Ответ API: {detail}"
+    return msg
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Базовый атомарный write
 # ──────────────────────────────────────────────────────────────────────────────
@@ -212,11 +251,12 @@ def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None
     """
     from integrations.prelend_client import get_client
     client = get_client()
-    ok = client.write_advertisers(data, source=f"contenthub:{username}")
+    payload = _normalize_advertisers_for_api(data)
+    ok = client.write_advertisers(payload, source=f"contenthub:{username}")
     if ok:
         return
     try:
-        atomic_write_json(cfg.PL_ADVERTISERS, data)
+        atomic_write_json(cfg.PL_ADVERTISERS, payload)
         _git_commit(
             repo_dir=cfg.PRELEND_DIR,
             file_path=cfg.PL_ADVERTISERS,
@@ -228,11 +268,15 @@ def write_pl_advertisers(data: List[Dict], username: str = "contenthub") -> None
             return
         # PUT не прошёл — GET с VPS всё ещё со старыми данными; сверка с API бессмысленна и даёт ложные ошибки.
         raise RuntimeError(
-            "PreLend Internal API не принял запись (PUT /config/advertisers). "
-            "Локальный advertisers.json в репозитории уже обновлён. "
-            "Варианты: восстановить SSH-туннель на :9090 и PL_INTERNAL_API_KEY; "
-            "или для работы только с локальным клоном PreLend добавить в backend/.env "
-            "CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 — тогда ContentHub читает те же файлы и не сверяет с VPS."
+            _append_api_put_hint(
+                "PreLend Internal API не принял запись (PUT /config/advertisers). "
+                "Локальный advertisers.json в репозитории уже обновлён. "
+                "Частые причины: 403 — неверный PL_INTERNAL_API_KEY относительно VPS; "
+                "500 — нет прав на запись config/ (www-data) или диск. "
+                "Варианты: починить туннель :9090 и ключ в общем .secrets.env; "
+                "или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 для режима только локальных файлов.",
+                client,
+            )
         )
     except RuntimeError:
         raise
@@ -251,11 +295,12 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
     if target is None:
         return False
     target.update(updates)
-    if client.write_advertisers(advertisers, source=f"contenthub:{username}"):
+    payload = _normalize_advertisers_for_api(advertisers)
+    if client.write_advertisers(payload, source=f"contenthub:{username}"):
         return True
     # Fallback на локальную запись
     try:
-        atomic_write_json(cfg.PL_ADVERTISERS, advertisers)
+        atomic_write_json(cfg.PL_ADVERTISERS, payload)
         _git_commit(
             repo_dir=cfg.PRELEND_DIR,
             file_path=cfg.PL_ADVERTISERS,
@@ -272,10 +317,13 @@ def write_pl_advertiser(advertiser_id: str, updates: Dict, username: str = "cont
             )
             return True
         raise RuntimeError(
-            "PreLend Internal API не принял запись (PUT /config/advertisers). "
-            f"Рекламодатель '{advertiser_id}' обновлён в локальном advertisers.json. "
-            "Варианты: восстановить туннель :9090 и PL_INTERNAL_API_KEY; "
-            "или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 в backend/.env для режима только локальных файлов."
+            _append_api_put_hint(
+                "PreLend Internal API не принял запись (PUT /config/advertisers). "
+                f"Рекламодатель '{advertiser_id}' обновлён в локальном advertisers.json. "
+                "Проверьте PL_INTERNAL_API_KEY (тот же, что на VPS) и права на config/ на сервере. "
+                "Или CONTENTHUB_PL_TRUST_LOCAL_FALLBACK=1 для локального режима.",
+                client,
+            )
         )
     except RuntimeError:
         raise

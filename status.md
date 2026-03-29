@@ -411,7 +411,7 @@ http://localhost:8000/health
 | **Сборка** | После изменений фронта: `npm run build` (обновление `dist` для `vite preview`). |
 | **Тесты** | `pytest backend/tests/ -q` → **26 passed** (включая новые). |
 
-**Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на `config/` + `data/`; **`PL_INTERNAL_API_KEY`** совпадает с ContentHub **`backend/.env`** (локально) или с переменными из **`/run/prelend.env`** при деплое через SOPS (**`deploy/vps_one_command.sh`**).
+**Эксплуатация:** на VPS нужны актуальный PreLend Internal API и права на **`config/`** + **`data/`**; **`PL_INTERNAL_API_KEY`** совпадает с общим секретом (**`GitHub/.secrets.env`**) и с окружением **`prelend-internal-api`** на сервере (**`/run/prelend.env`** или unit). Если при сохранении рекламодателей в UI приходит **HTTP 500** и в тексте ошибки есть **`Permission denied`** и путь **`.../config/tmp`** — на VPS у **`www-data`** нет записи в **`/var/www/prelend/config/`**: пошаговое исправление и профилактика описаны в **`PreLend/status.md`** → раздел **«ОБЯЗАТЕЛЬНО: права на каталог config/»** (и сессия **25** в том же файле).
 
 ### Сессия 10 (27.03.2026) — Телеметрия Orchestrator на дашборде, вкладка команд оператора
 
@@ -490,3 +490,11 @@ http://localhost:8000/health
 | **`backend/api/routes/auth.py`** | **[MEDIUM]** `change_password`: `body: dict` → `ChangePasswordRequest(BaseModel)` с полями `old_password`, `new_password`. Автоматическая валидация Pydantic, корректная OpenAPI схема. |
 
 **Контекст:** Часть полного code review экосистемы. Также рекомендовано: LIKE wildcard экранирование в будущем Audit Log endpoint (план сессии 13.2).
+
+### Сессия 14 (29.03.2026) — Документация: права `PreLend/config/` и PUT рекламодателей
+
+**Проблема:** при рабочем туннеле **:9090** и **`GET /health`** сохранение рекламодателей из ContentHub падало с **HTTP 500**, в **`detail`** — **`Permission denied: .../config/tmp….tmp`**.
+
+**Причина на VPS:** **`prelend-internal-api`** (**`www-data`**) не может писать во временные файлы в **`config/`** (атомарная запись JSON).
+
+**Действия:** исправление **`chown`/`chmod`** на сервере и закрепление в **`PreLend/deploy/deploy.sh`**; полная инструкция, smoke **curl PUT** и чеклист «как не повторять» — в **`PreLend/status.md`** (раздел **«ОБЯЗАТЕЛЬНО: права на каталог config/`»**, сессия **25**). В ContentHub в текст ошибки API добавлено поле **«Ответ API: …»** для диагностики (**`Orchestrator/integrations/prelend_client.py`**, **`config_writer`**).
