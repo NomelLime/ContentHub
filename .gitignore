@@ -19,6 +19,8 @@ backend/.env.*
 !backend/.env.example
 # Доп. локальные секреты; общий GitHub/.secrets.env — в .gitignore корня монорепы
 secrets.local.env
+# CH_TUNNEL_* для PowerShell-лаунчеров (см. tunnel.local.env.example); дубликат run-all.local.cmd
+tunnel.local.env
 *.pem
 *.key
 

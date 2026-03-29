@@ -3,17 +3,28 @@ param(
   [switch]$NoTunnel,
   [int]$FrontendPort = 4173,
   [int]$BackendPort = 8000,
-  [string]$TunnelTarget = $env:CH_TUNNEL_TARGET,
-  [string]$TunnelTool = $env:CH_TUNNEL_TOOL,
-  [string]$TunnelHost = $env:CH_TUNNEL_HOST,
-  [string]$TunnelUser = $env:CH_TUNNEL_USER,
-  [string]$TunnelPassword = $env:CH_TUNNEL_PASSWORD,
+  [string]$TunnelTarget = "",
+  [string]$TunnelTool = "",
+  [string]$TunnelHost = "",
+  [string]$TunnelUser = "",
+  [string]$TunnelPassword = "",
   [int]$TunnelLocalPort = 9090,
   [string]$TunnelRemoteHost = "127.0.0.1",
   [int]$TunnelRemotePort = 9090
 )
 
 $ErrorActionPreference = "Stop"
+
+$monoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $monoRoot "_monorepo_env.ps1")
+Import-MonorepoStackEnv -Root $monoRoot
+$tunnelResolved = Resolve-TunnelParamsFromEnv -TunnelTarget $TunnelTarget -TunnelTool $TunnelTool `
+  -TunnelHost $TunnelHost -TunnelUser $TunnelUser -TunnelPassword $TunnelPassword
+$TunnelTarget = $tunnelResolved.TunnelTarget
+$TunnelTool = $tunnelResolved.TunnelTool
+$TunnelHost = $tunnelResolved.TunnelHost
+$TunnelUser = $tunnelResolved.TunnelUser
+$TunnelPassword = $tunnelResolved.TunnelPassword
 
 function Stop-IfRunning {
   param([System.Diagnostics.Process]$Proc)

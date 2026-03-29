@@ -30,10 +30,11 @@ function Import-DotEnvFile {
   }
 }
 
-# Подхват PL_* как у uvicorn (main.py грузит .secrets.env → backend/.env)
+# Подхват PL_* и CH_TUNNEL (как _monorepo_env.ps1 / launch_stack_sequential.ps1)
 $monoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Import-DotEnvFile (Join-Path $monoRoot ".secrets.env")
 Import-DotEnvFile (Join-Path $monoRoot "ContentHub\backend\.env")
+Import-DotEnvFile (Join-Path $monoRoot "ContentHub\tunnel.local.env")
 
 $base = ($env:PL_INTERNAL_API_URL).TrimEnd("/")
 if ([string]::IsNullOrWhiteSpace($base)) { $base = "http://127.0.0.1:9090" }

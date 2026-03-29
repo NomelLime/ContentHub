@@ -4,6 +4,9 @@ setlocal
 REM ------------------------------------------------------------------
 REM Shareable launcher template (safe to keep in git).
 REM Copy to your own local file or edit values directly.
+REM
+REM Для PowerShell (launch_stack_sequential.ps1, start_local_stack.ps1, run-all.ps1)
+REM те же CH_TUNNEL_* можно хранить в ContentHub\tunnel.local.env (см. tunnel.local.env.example).
 REM ------------------------------------------------------------------
 
 set "CH_TUNNEL_TOOL=plink"
