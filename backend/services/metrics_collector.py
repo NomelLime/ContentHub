@@ -40,8 +40,13 @@ def collect_dashboard() -> Dict[str, Any]:
     return result
 
 
-def _collect_sp_summary() -> Dict:
-    """Читает analytics.json ShortsProject и возвращает агрегат."""
+def _collect_sp_summary(period_days: Optional[int] = None) -> Dict:
+    """Читает analytics.json ShortsProject и возвращает агрегат.
+
+    period_days:
+      - None: полная сводка (для dashboard)
+      - int:  сводка только по видео, загруженным за последние N дней (для funnel)
+    """
     path = cfg.SP_ANALYTICS_FILE
     if not path.exists():
         return {"available": False}
@@ -55,6 +60,7 @@ def _collect_sp_summary() -> Dict:
     now = datetime.now(timezone.utc)
     cutoff_24h = now - timedelta(hours=24)
     cutoff_7d  = now - timedelta(days=7)
+    cutoff_period = now - timedelta(days=period_days) if period_days is not None else None
 
     total_views = 0
     total_likes = 0
@@ -70,9 +76,25 @@ def _collect_sp_summary() -> Dict:
         platform  = entry.get("platform", "unknown")
         upload_ts = entry.get("uploaded_at", "")
 
-        total_views += views
-        total_likes += likes
-        platform_views[platform] = platform_views.get(platform, 0) + views
+        include_for_summary = True
+
+        # Для period_days учитываем только записи с uploaded_at >= cutoff_period.
+        # Если uploaded_at отсутствует/битый — запись исключаем из периодной сводки.
+        if cutoff_period is not None:
+            include_for_summary = False
+            if upload_ts:
+                try:
+                    ts_period = datetime.fromisoformat(upload_ts.replace("Z", "+00:00"))
+                    if ts_period.tzinfo is None:
+                        ts_period = ts_period.replace(tzinfo=timezone.utc)
+                    include_for_summary = ts_period >= cutoff_period
+                except Exception:
+                    include_for_summary = False
+
+        if include_for_summary:
+            total_views += views
+            total_likes += likes
+            platform_views[platform] = platform_views.get(platform, 0) + views
 
         if upload_ts:
             try:
@@ -197,8 +219,9 @@ def collect_funnel(days: int = 7) -> List[Dict]:
     """
     from db.connection import get_db
 
-    sp_data   = _collect_sp_summary()
-    pl_data   = _collect_pl_summary()
+    period_hours = max(1, days * 24)
+    sp_data   = _collect_sp_summary(period_days=days)
+    pl_data   = _collect_pl_summary(period_hours=period_hours)
     cutoff    = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Читаем линки из contenthub.db

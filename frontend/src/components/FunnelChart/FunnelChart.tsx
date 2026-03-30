@@ -29,11 +29,15 @@ export default function FunnelChart() {
 
   const agg = data?.funnel?.[0]  // агрегат если нет детальных линков
 
-  const chartData = agg ? STEPS.map((s) => ({
-    name:  s.label,
-    value: agg[s.key] || 0,
-    color: s.color,
-  })) : []
+  const chartData = agg
+    ? STEPS.map((s) => ({
+        name:  s.label,
+        value: Number(agg[s.key]) || 0,
+        color: s.color,
+      }))
+    : []
+
+  const maxBar = Math.max(1, ...chartData.map((d) => d.value))
 
   return (
     <div>
@@ -52,7 +56,11 @@ export default function FunnelChart() {
       ) : chartData.length ? (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 60 }}>
-            <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+            <XAxis
+              type="number"
+              domain={[0, maxBar]}
+              tick={{ fill: '#9ca3af', fontSize: 12 }}
+            />
             <YAxis dataKey="name" type="category" tick={{ fill: '#9ca3af', fontSize: 12 }} />
             <Tooltip
               contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}

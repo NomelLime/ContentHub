@@ -16,6 +16,7 @@ from typing import Annotated, List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+import config as cfg
 from db.connection import get_db
 from services.auth import log_audit, require_admin, require_operator, require_viewer
 from services.config_reader import read_pl_splits
@@ -91,7 +92,9 @@ class SplitSchema(BaseModel):
         result = []
         for g in v:
             if not isinstance(g, str):
+                raise ValueError(
                     f"Элемент geo должен быть строкой, получен: {type(g).__name__}"
+                )
             code = g.strip().upper()
             if not code:
                 continue
