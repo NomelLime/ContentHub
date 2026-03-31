@@ -22,6 +22,21 @@
 
 ---
 
+## Сессия 24 (31.03.2026) — Native metrics UI + KPI colors + Orchestrator expanded metrics
+
+| Область | Изменение |
+|---------|-----------|
+| **Dashboard backend (`services/metrics_collector.py`)** | Подтянуты расширенные метрики из `Orchestrator`: `decision_metrics`, `node_duration_sec`, `agent_metrics` (включая SP agent health и PL traffic heartbeat), а также блок `sp.platform_native_metrics` из `ShortsProject/data/analytics.json`. |
+| **Dashboard UI (`pages/DashboardPage.tsx`)** | Добавлены карточки KPI качества решений (apply/success/rollback/patch), operational блоки цикла (duration/commands/pipeline/supply), top-3 native metrics, и цветовая индикация `green/yellow/red` по порогам. |
+| **Новая страница (`pages/PlatformNativeMetricsPage.tsx`)** | Таблица `recent_20` native metrics с фильтрами по платформе/аккаунту и сортировкой (`views/likes/comments/engagement/uploaded_at`, asc/desc). |
+| **Навигация (`App.tsx`)** | Добавлен маршрут и пункт меню: `/platform-native-metrics` → **Native Metrics**. |
+
+**Тесты/проверки:**
+- `python -m pytest backend/tests/test_analytics.py -q` — ✅
+- Lints по изменённым фронтенд/бэкенд файлам — ✅
+
+---
+
 ## СТРУКТУРА ПРОЕКТА
 
 ```

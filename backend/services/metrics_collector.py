@@ -69,6 +69,8 @@ def _collect_sp_summary(period_days: Optional[int] = None) -> Dict:
     platform_views: Dict[str, int] = {}
 
     for stem, entry in data.items():
+        if stem == "platform_native_metrics":
+            continue
         if not isinstance(entry, dict):
             continue
         views     = entry.get("views", 0) or 0
@@ -110,6 +112,8 @@ def _collect_sp_summary(period_days: Optional[int] = None) -> Dict:
 
     top_platform = max(platform_views, key=platform_views.get, default="—") if platform_views else "—"
 
+    native_block = data.get("platform_native_metrics") if isinstance(data, dict) else None
+
     return {
         "available":     True,
         "total_views":   total_views,
@@ -118,7 +122,8 @@ def _collect_sp_summary(period_days: Optional[int] = None) -> Dict:
         "videos_7d":     videos_7d,
         "top_platform":  top_platform,
         "platform_views": platform_views,
-        "total_videos":  len(data),
+        "total_videos":  len([k for k in data.keys() if k != "platform_native_metrics"]),
+        "platform_native_metrics": native_block if isinstance(native_block, dict) else {},
     }
 
 
@@ -191,12 +196,71 @@ def _collect_orc_summary() -> Dict:
                 "SELECT summary, created_at, status FROM evolution_plans ORDER BY created_at DESC LIMIT 1"
             ).fetchone()
 
+            latest_sp_snap = conn.execute(
+                """
+                SELECT raw_summary_json, snapshot_at
+                FROM metrics_snapshots
+                WHERE source='ShortsProject'
+                ORDER BY snapshot_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            latest_pl_snap = conn.execute(
+                """
+                SELECT raw_summary_json, snapshot_at
+                FROM metrics_snapshots
+                WHERE source='PreLend'
+                ORDER BY snapshot_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+
+            sp_raw = {}
+            pl_raw = {}
+            try:
+                if latest_sp_snap and latest_sp_snap["raw_summary_json"]:
+                    sp_raw = json.loads(latest_sp_snap["raw_summary_json"])
+            except Exception:
+                sp_raw = {}
+            try:
+                if latest_pl_snap and latest_pl_snap["raw_summary_json"]:
+                    pl_raw = json.loads(latest_pl_snap["raw_summary_json"])
+            except Exception:
+                pl_raw = {}
+
+            agent_health = sp_raw.get("agent_health") or {}
+            strategist_recs_count = sp_raw.get("strategist_recs_count")
+            analyst_verdicts_count = pl_raw.get("analyst_verdicts_count")
+            traffic_alive = pl_raw.get("traffic_alive")
+            last_click_ago_sec = pl_raw.get("last_click_ago_sec")
+            cycle_summary = (telemetry or {}).get("cycle_summary") or {}
+            decision_metrics = cycle_summary.get("decision_metrics") or {}
+            node_duration_sec = cycle_summary.get("node_duration_sec") or {}
+
             return {
                 "available":      True,
                 "zones":          zones,
                 "pending_patches": pending_patches,
                 "last_plan": dict(last_plan) if last_plan else None,
                 "cycle_telemetry": telemetry,
+                "agent_metrics": {
+                    "sp_agent_health": {
+                        "total": agent_health.get("total"),
+                        "running": agent_health.get("running"),
+                        "idle": agent_health.get("idle"),
+                        "error": agent_health.get("error"),
+                        "other": agent_health.get("other"),
+                        "running_ratio": agent_health.get("running_ratio"),
+                    },
+                    "strategist_recs_count": strategist_recs_count,
+                    "analyst_verdicts_count": analyst_verdicts_count,
+                    "traffic_alive": traffic_alive,
+                    "last_click_ago_sec": last_click_ago_sec,
+                    "sp_snapshot_at": latest_sp_snap["snapshot_at"] if latest_sp_snap else None,
+                    "pl_snapshot_at": latest_pl_snap["snapshot_at"] if latest_pl_snap else None,
+                },
+                "decision_metrics": decision_metrics,
+                "node_duration_sec": node_duration_sec,
             }
     except Exception as exc:
         logger.warning("[MetricsCollector] ORC DB read error: %s", exc)

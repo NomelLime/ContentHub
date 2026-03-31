@@ -9,6 +9,7 @@ const Dashboard     = lazy(() => import('./pages/DashboardPage'))
 const PatchesPage   = lazy(() => import('./pages/PatchesPage'))
 const ConfigPage    = lazy(() => import('./pages/ConfigPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const PlatformNativeMetricsPage = lazy(() => import('./pages/PlatformNativeMetricsPage'))
 const OperatorCommandsPage = lazy(() => import('./pages/OperatorCommandsPage'))
 const UsersPage     = lazy(() => import('./pages/UsersPage'))
 const AuditPage     = lazy(() => import('./pages/AuditPage'))
@@ -56,6 +57,7 @@ const NAV = [
   { to: '/patches',   label: 'Патчи' },
   { to: '/config',    label: 'Конфиги' },
   { to: '/analytics', label: 'Аналитика' },
+  { to: '/platform-native-metrics', label: 'Native Metrics' },
   { to: '/operator-commands', label: 'Команды ОР' },
 ]
 
@@ -156,6 +158,7 @@ export default function App() {
                 <Route path="/patches"   element={<PatchesPage />} />
                 <Route path="/config"    element={<ConfigPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/platform-native-metrics" element={<PlatformNativeMetricsPage />} />
                 <Route path="/operator-commands" element={<OperatorCommandsPage />} />
                 <Route path="/users"     element={<UsersPage />} />
                 <Route path="/audit"     element={<AuditPage />} />
