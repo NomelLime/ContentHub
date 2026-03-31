@@ -136,68 +136,39 @@ def _pl_trust_local_fallback() -> bool:
     )
 
 
-def read_pl_settings() -> Dict:
-    """Читает PreLend/config/settings.json через Internal API; trust-local или недоступность API — локальный файл."""
-    from integrations.prelend_client import get_client
-
+def _read_pl_config(api_method: str, local_path: Path, expected_type: type, default: Any) -> Any:
+    """Единый паттерн чтения конфига PreLend: trust-local → API → fallback на диск."""
     if _pl_trust_local_fallback():
-        raw = _read_json_file(cfg.PL_SETTINGS)
-        return raw if isinstance(raw, dict) else {}
+        raw = _read_json_file(local_path)
+        return raw if isinstance(raw, expected_type) else default
 
+    from integrations.prelend_client import get_client
     client = get_client()
     if client.is_available():
-        data = client.get_settings()
-        return data if isinstance(data, dict) else {}
-    raw = _read_json_file(cfg.PL_SETTINGS)
-    return raw if isinstance(raw, dict) else {}
+        data = getattr(client, api_method)()
+        return data if isinstance(data, expected_type) else default
+    raw = _read_json_file(local_path)
+    return raw if isinstance(raw, expected_type) else default
+
+
+def read_pl_settings() -> Dict:
+    """Читает PreLend/config/settings.json через Internal API; trust-local или недоступность API — локальный файл."""
+    return _read_pl_config("get_settings", cfg.PL_SETTINGS, dict, {})
 
 
 def read_pl_advertisers() -> List[Dict]:
     """Читает advertisers.json: при trust-local или недоступном API — с диска, иначе через Internal API."""
-    from integrations.prelend_client import get_client
-
-    if _pl_trust_local_fallback():
-        raw = _read_json_file(cfg.PL_ADVERTISERS)
-        return raw if isinstance(raw, list) else []
-
-    client = get_client()
-    if client.is_available():
-        data = client.get_advertisers()
-        return data if isinstance(data, list) else []
-    raw = _read_json_file(cfg.PL_ADVERTISERS)
-    return raw if isinstance(raw, list) else []
+    return _read_pl_config("get_advertisers", cfg.PL_ADVERTISERS, list, [])
 
 
 def read_pl_geo_data() -> Dict:
     """Читает geo_data.json: trust-local или API недоступен — локальный файл."""
-    from integrations.prelend_client import get_client
-
-    if _pl_trust_local_fallback():
-        raw = _read_json_file(cfg.PL_GEO_DATA)
-        return raw if isinstance(raw, dict) else {}
-
-    client = get_client()
-    if client.is_available():
-        data = client.get_geo_data()
-        return data if isinstance(data, dict) else {}
-    raw = _read_json_file(cfg.PL_GEO_DATA)
-    return raw if isinstance(raw, dict) else {}
+    return _read_pl_config("get_geo_data", cfg.PL_GEO_DATA, dict, {})
 
 
 def read_pl_splits() -> List[Dict]:
     """Читает splits.json: trust-local или API недоступен — локальный файл."""
-    from integrations.prelend_client import get_client
-
-    if _pl_trust_local_fallback():
-        raw = _read_json_file(cfg.PL_SPLITS)
-        return raw if isinstance(raw, list) else []
-
-    client = get_client()
-    if client.is_available():
-        data = client.get_splits()
-        return data if isinstance(data, list) else []
-    raw = _read_json_file(cfg.PL_SPLITS)
-    return raw if isinstance(raw, list) else []
+    return _read_pl_config("get_splits", cfg.PL_SPLITS, list, [])
 
 
 def read_pl_templates() -> Dict[str, List[str]]:
