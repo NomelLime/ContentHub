@@ -22,6 +22,24 @@
 
 ---
 
+## Сессия 25 (06.04.2026) — Dashboard/observability для миграции `vk/rutube/ok`
+
+| Область | Изменение |
+|---------|-----------|
+| **`backend/config.py`** | Добавлен путь `SP_OPERATOR_BRIDGE_STATS` (`ShortsProject/data/operator_bridge_stats.json`). |
+| **`backend/services/metrics_collector.py`** | Добавлен блок `operator_bridge` в `collect_dashboard()`: `manual_intervention_rate`, `retry_count`, `median_publish_time_sec`, `by_platform`. |
+| **`frontend/src/pages/DashboardPage.tsx`** | Добавлены KPI-карточки migration-контура: Manual intervention rate, Operator retry count, Median publish time. |
+
+**Контекст миграции:**
+- Платформенные ключи на дашборде остаются динамическими (`by_platform`), что позволяет без доп. миграций показывать `vk/rutube/ok`.
+- Метрики operator bridge читаются из файла ShortsProject и сразу доступны в `/api/dashboard`.
+
+**Проверки:**
+- `pytest backend -q` → `36 passed, 1 skipped` ✅  
+- lints по изменённым backend/frontend файлам — ✅
+
+---
+
 ## Сессия 24 (31.03.2026) — Native metrics UI + KPI colors + Orchestrator expanded metrics
 
 | Область | Изменение |

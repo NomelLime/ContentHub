@@ -15,6 +15,7 @@ import json
 import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any, Dict, List, Optional
 
 import config as cfg
@@ -36,8 +37,52 @@ def collect_dashboard() -> Dict[str, Any]:
         "sp":  _collect_sp_summary(),
         "pl":  _collect_pl_summary(),
         "orc": _collect_orc_summary(),
+        "operator_bridge": _collect_operator_bridge_summary(),
     }
     return result
+
+
+def _collect_operator_bridge_summary() -> Dict[str, Any]:
+    path = cfg.SP_OPERATOR_BRIDGE_STATS
+    if not path.exists():
+        return {"available": False}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("[MetricsCollector] operator_bridge_stats read error: %s", exc)
+        return {"available": False}
+
+    by_platform = payload.get("by_platform") if isinstance(payload, dict) else {}
+    if not isinstance(by_platform, dict):
+        by_platform = {}
+
+    total_manual = 0
+    total_published = 0
+    total_retry = 0
+    all_durations: List[float] = []
+
+    for _, item in by_platform.items():
+        if not isinstance(item, dict):
+            continue
+        total_manual += int(item.get("manual_required", 0) or 0)
+        total_published += int(item.get("published", 0) or 0)
+        total_retry += int(item.get("retry_count", 0) or 0)
+        raw = item.get("publish_durations_sec") or []
+        if isinstance(raw, list):
+            all_durations.extend(float(v) for v in raw if isinstance(v, (int, float)))
+
+    total_ops = total_manual + total_published
+    manual_intervention_rate = (total_manual / total_ops) if total_ops > 0 else 0.0
+    median_publish_time = median(all_durations) if all_durations else None
+
+    return {
+        "available": True,
+        "updated_at": payload.get("updated_at"),
+        "manual_intervention_rate": manual_intervention_rate,
+        "retry_count": total_retry,
+        "median_publish_time_sec": median_publish_time,
+        "by_platform": by_platform,
+    }
 
 
 def _collect_sp_summary(period_days: Optional[int] = None) -> Dict:

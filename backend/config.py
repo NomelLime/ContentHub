@@ -44,6 +44,7 @@ ORCHESTRATOR_DIR    = Path(os.getenv("ORC_DIR",  str(GITHUB_ROOT / "Orchestrator
 SP_CONFIG_PY        = SHORTS_PROJECT_DIR / "pipeline" / "config.py"
 SP_ENV_FILE         = SHORTS_PROJECT_DIR / ".env"
 SP_ANALYTICS_FILE   = SHORTS_PROJECT_DIR / "data" / "analytics.json"
+SP_OPERATOR_BRIDGE_STATS = SHORTS_PROJECT_DIR / "data" / "operator_bridge_stats.json"
 SP_AGENT_MEMORY     = SHORTS_PROJECT_DIR / "data" / "agent_memory.json"
 SP_ACCOUNTS_ROOT    = SHORTS_PROJECT_DIR / "accounts"
 

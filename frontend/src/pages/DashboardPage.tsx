@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const sp  = data?.sp  || {}
   const pl  = data?.pl  || {}
   const orc = data?.orc || {}
+  const bridge = data?.operator_bridge || {}
   const cycleSummary = orc?.cycle_telemetry?.cycle_summary || {}
   const agentMetrics = orc?.agent_metrics || {}
   const decisionMetrics = orc?.decision_metrics || cycleSummary?.decision_metrics || {}
@@ -116,6 +117,27 @@ export default function DashboardPage() {
         <MetricCard title="Видео за 24ч"        value={sp.videos_24h  || '—'}                    color="green"  loading={loading} />
         <MetricCard title="Клики PreLend (24ч)" value={pl.clicks_24h?.toLocaleString() || '—'}  color="purple" loading={loading} />
         <MetricCard title="CR PreLend (24ч)"    value={pl.cr_24h ? `${(pl.cr_24h * 100).toFixed(2)}%` : '—'} color="yellow" loading={loading} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <MetricCard
+          title="Manual intervention rate"
+          value={typeof bridge.manual_intervention_rate === 'number' ? `${(bridge.manual_intervention_rate * 100).toFixed(1)}%` : '—'}
+          color={colorByRate(bridge.manual_intervention_rate, 0.2, 0.35, true)}
+          loading={loading}
+        />
+        <MetricCard
+          title="Operator retry count"
+          value={typeof bridge.retry_count === 'number' ? bridge.retry_count : '—'}
+          color={colorByRate(bridge.retry_count, 5, 12, true)}
+          loading={loading}
+        />
+        <MetricCard
+          title="Median publish time"
+          value={typeof bridge.median_publish_time_sec === 'number' ? `${Math.round(bridge.median_publish_time_sec)}s` : '—'}
+          color={colorByDurationSec(bridge.median_publish_time_sec)}
+          loading={loading}
+        />
       </div>
 
       {nativeByPlatform && Object.keys(nativeByPlatform).length > 0 && (
