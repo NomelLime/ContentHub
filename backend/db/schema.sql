@@ -109,3 +109,23 @@ CREATE TABLE IF NOT EXISTS system_events (
     created_at  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_created ON system_events(created_at);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Реестр agent events (для дашбордов Hook/Risk/Experiment)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS agent_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_project  TEXT NOT NULL,
+    agent_name      TEXT NOT NULL,
+    event_type      TEXT NOT NULL,
+    severity        TEXT NOT NULL DEFAULT 'info',
+    creative_id     TEXT,
+    hook_type       TEXT,
+    experiment_id   TEXT,
+    agent_run_id    TEXT,
+    payload_json    TEXT NOT NULL DEFAULT '{}',
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_events_created ON agent_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_hook ON agent_events(hook_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_events_experiment ON agent_events(experiment_id, created_at DESC);

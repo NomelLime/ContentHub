@@ -3,6 +3,21 @@
 
 ---
 
+## Сессия 26 (13.04.2026) — Безопасная idempotent-миграция `contenthub.db` (agent_events)
+
+| Область | Изменение |
+|---------|-----------|
+| **`scripts/migrate_contenthub_db.py`** | Новый idempotent-скрипт миграции существующей `contenthub.db`: выравнивает таблицу `agent_events` (добавляет недостающие поля), создаёт индексы `idx_agent_events_created`, `idx_agent_events_hook`, `idx_agent_events_experiment`. |
+| **`backend/db/migrations/2026-04-13_agent_events_registry.sql`** | Добавлен audit SQL-файл миграции реестра агентных событий. |
+| **`MIGRATION_AGENT_EVENTS.md`** | Runbook: backup -> apply -> verify (`PRAGMA table_info/index_list`) для `agent_events`. |
+| **`backend/db/connection.py`** | В `init_db()` добавлен `_migrate_agent_events_registry()` для авто-выравнивания схемы на старых БД при старте ContentHub. |
+
+**Проверки:**
+- `python -m py_compile scripts/migrate_contenthub_db.py backend/db/connection.py` — ✅
+- Линтер по изменённым файлам миграции/connection — ✅
+
+---
+
 ## РОЛЬ
 Единая веб-панель управления для всех проектов (ShortsProject, PreLend, Orchestrator).
 Заменяет ручную правку конфигов, файлов и запуск агентов через CLI.

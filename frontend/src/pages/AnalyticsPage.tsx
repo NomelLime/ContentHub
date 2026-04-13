@@ -1,6 +1,8 @@
 import React from 'react'
 import FunnelChart from '../components/FunnelChart/FunnelChart'
 import PlGeoTable from '../components/PlGeoTable/PlGeoTable'
+import HookEffectivenessBoard from '../components/HookEffectivenessBoard'
+import RiskCommandCenter from '../components/RiskCommandCenter'
 
 export default function AnalyticsPage() {
   return (
@@ -16,6 +18,9 @@ export default function AnalyticsPage() {
         </p>
         <FunnelChart />
       </div>
+
+      <HookEffectivenessBoard />
+      <RiskCommandCenter />
     </div>
   )
 }

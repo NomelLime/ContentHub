@@ -23,7 +23,9 @@ from services.config_reader import read_pl_splits
 from services.config_writer import write_pl_splits
 from services.metrics_collector import (
     collect_funnel,
+    _collect_hook_effectiveness,
     _collect_pl_summary,
+    _collect_risk_command_center,
     _collect_sp_summary,
 )
 
@@ -176,6 +178,22 @@ def get_pl_analytics(
 ):
     """Метрики PreLend за period_hours; geo_breakdown — сортировка на фронте."""
     return _collect_pl_summary(period_hours=period_hours)
+
+
+@router.get("/hooks")
+def get_hook_effectiveness(
+    period_hours: int = Query(168, ge=1, le=720),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    return _collect_hook_effectiveness(period_hours=period_hours)
+
+
+@router.get("/risk")
+def get_risk_command_center(
+    period_hours: int = Query(168, ge=1, le=720),
+    user: Annotated[dict, Depends(require_viewer)] = None,
+):
+    return _collect_risk_command_center(period_hours=period_hours)
 
 
 @router.get("/audit")

@@ -36,6 +36,8 @@ def collect_dashboard() -> Dict[str, Any]:
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "sp":  _collect_sp_summary(),
         "pl":  _collect_pl_summary(),
+        "hook_effectiveness": _collect_hook_effectiveness(),
+        "risk_command_center": _collect_risk_command_center(),
         "orc": _collect_orc_summary(),
         "operator_bridge": _collect_operator_bridge_summary(),
     }
@@ -200,6 +202,43 @@ def _collect_pl_summary(period_hours: int = 24) -> Dict:
         "bot_pct_24h":     bot_pct,
         "top_geo":         data.get("top_geo") or "—",
         "geo_breakdown":   data.get("geo_breakdown") or [],
+    }
+
+
+def _collect_hook_effectiveness(period_hours: int = 168) -> Dict[str, Any]:
+    from integrations.prelend_client import get_client
+    client = get_client()
+    if not client.is_available():
+        return {"available": False, "error": "PreLend API недоступен", "by_hook_type": [], "by_creative": []}
+    payload = client.get_hook_metrics(period_hours=period_hours) or {}
+    by_hook = payload.get("by_hook_type")
+    by_creative = payload.get("by_creative")
+    return {
+        "available": True,
+        "period_hours": payload.get("period_hours", period_hours),
+        "by_hook_type": by_hook if isinstance(by_hook, list) else [],
+        "by_creative": by_creative if isinstance(by_creative, list) else [],
+    }
+
+
+def _collect_risk_command_center(period_hours: int = 168) -> Dict[str, Any]:
+    from integrations.prelend_client import get_client
+    client = get_client()
+    if not client.is_available():
+        return {
+            "available": False,
+            "error": "PreLend API недоступен",
+            "by_advertiser": [],
+            "by_geo": [],
+            "by_hook_type": [],
+        }
+    payload = client.get_risk_metrics(period_hours=period_hours) or {}
+    return {
+        "available": True,
+        "period_hours": payload.get("period_hours", period_hours),
+        "by_advertiser": payload.get("by_advertiser") if isinstance(payload.get("by_advertiser"), list) else [],
+        "by_geo": payload.get("by_geo") if isinstance(payload.get("by_geo"), list) else [],
+        "by_hook_type": payload.get("by_hook_type") if isinstance(payload.get("by_hook_type"), list) else [],
     }
 
 

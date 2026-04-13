@@ -218,6 +218,8 @@ export const analytics = {
   planQuality: (limit = 10)      => api.get<any>(`/analytics/plan-quality?limit=${limit}`),
   /** PreLend: сводка и geo_breakdown; period_hours 1–168 */
   pl:          (periodHours = 24) => api.get<any>(`/analytics/pl?period_hours=${periodHours}`),
+  hooks:       (periodHours = 168) => api.get<any>(`/analytics/hooks?period_hours=${periodHours}`),
+  risk:        (periodHours = 168) => api.get<any>(`/analytics/risk?period_hours=${periodHours}`),
   audit:       (limit = 100, project?: string) =>
     api.get<any[]>(
       `/analytics/audit?limit=${limit}${project ? `&project=${encodeURIComponent(project)}` : ''}`,
